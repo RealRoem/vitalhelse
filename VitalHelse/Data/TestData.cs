@@ -10,13 +10,39 @@ public static class TestData
 
         if (!db.Categories.Any()) {
             SeedCategories(db);
+            SeedPhysicalAttributes(db);
             SeedProducts(db);
+            
+
         }
     }
+    private static void SeedPhysicalAttributes(ApplicationDbContext db)
+    {
+        if (db.PhysicalAttributes.Any()) return;
+
+        var sizes = new List<PhysicalAttribute>
+        {
+            new() { Attribute = "100gr" },
+            new() { Attribute = "50ml" },
+            new() { Attribute = "100ml" },
+            new() { Attribute = "150ml" },
+            new() { Attribute = "200ml" },
+            new() { Attribute = "250ml" },
+            new() { Attribute = "300ml" },
+            new() { Attribute = "350ml" },
+            new() { Attribute = "400ml" },
+        };
+
+        db.PhysicalAttributes.AddRange(sizes);
+        db.SaveChanges();
+    }
+
+    
 
     // =========================================================
     //                 KATEGORI-SEEDING (RENT HIERARKI)
     // =========================================================
+    
     private static void SeedCategories(ApplicationDbContext db)
     {
         // --------------------------
@@ -136,7 +162,8 @@ public static class TestData
                 ProductDescription = "Rik nattkrem som fukter i dybden og reduserer tørrhetslinjer mens du sover.",
                 LabelDescription = "Nattkrem – Ansikt",
                 ProductPictures = { new() { PicturePath = "/images/products/Hyaluronic Acid Night Cream 50 ml.png" } },
-                ProductCategories = { new() { Category = hudAnsikt } }
+                ProductCategories = { new() { Category = hudAnsikt } },
+                PhysicalProductAttributes ={new() { PhysicalAttribute = db.PhysicalAttributes.First(a => a.Attribute == "50ml") }}
             },
             new()
             {
@@ -146,7 +173,8 @@ public static class TestData
                 ProductDescription = "Nattkrem med Aloe Vera og hyaluronsyre – roer huden og gir dyp fuktighet.",
                 LabelDescription = "Aloe Vera – Hudpleie",
                 ProductPictures = { new() { PicturePath = "/images/products/AloeV Hyaluronic Acid Night Cream 50 ml.png" } },
-                ProductCategories = { new() { Category = aloeHud } }
+                ProductCategories = { new() { Category = aloeHud } },
+                PhysicalProductAttributes ={new() { PhysicalAttribute = db.PhysicalAttributes.First(a => a.Attribute == "50ml") }}
             },
             new()
             {
@@ -166,7 +194,8 @@ public static class TestData
                 ProductDescription = "Intensiv krem for ru og tørre hender og føtter – mykgjør og beskytter.",
                 LabelDescription = "Ekstra rik – Hender/Føtter",
                 ProductPictures = { new() { PicturePath = "/images/products/Hand & Foot Creme Extreme, 100 gr.png" } },
-                ProductCategories = { new() { Category = hudHender } }
+                ProductCategories = { new() { Category = hudHender } },
+                PhysicalProductAttributes ={new() { PhysicalAttribute = db.PhysicalAttributes.First(a => a.Attribute == "100gr") }}
             },
             new()
             {
@@ -269,7 +298,8 @@ public static class TestData
                 ProductCategories = { new() { Category = hygHånd } }
             }
         };
-
+        
+        
         db.Products.AddRange(produkter);
         db.SaveChanges();
     }

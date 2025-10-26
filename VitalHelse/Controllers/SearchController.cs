@@ -40,7 +40,7 @@ public class SearchController : Controller
         {
             return Json(new List<object>());
         }
-        
+
         term = term.ToLower();
 
         var suggestions = await _context.Products
@@ -54,8 +54,8 @@ public class SearchController : Controller
             {
                 id = p.ProductId,
                 name = p.ProductName,
-                description = p.ProductDescription != null && p.ProductDescription.Length > 50 
-                    ? p.ProductDescription.Substring(0, 50) + "..." 
+                description = p.ProductDescription != null && p.ProductDescription.Length > 50
+                    ? p.ProductDescription.Substring(0, 50) + "..."
                     : p.ProductDescription,
                 price = p.ProductPrice
             })
@@ -66,6 +66,7 @@ public class SearchController : Controller
 
     /// <summary>
     /// Retrieves a list of products based on a search term.
+    /// Also eventual filters can be applied in the filter sidebar on the seach index page
     /// </summary>
     /// <param name="query">
     /// A string representing the search term used to match product names or descriptions.
@@ -74,24 +75,73 @@ public class SearchController : Controller
     /// An asynchronous result containing a view with a list of products.
     /// </returns>
     [HttpGet]
-    public async Task<IActionResult> Search(string query)
+    public async Task<IActionResult> Search(
+        string query,
+        List<int> categoryIds,
+        int? tagId,
+        int? sizeId,
+        double? minPrice,
+        double? maxPrice,
+        bool? discountOnly,
+        bool? inStockOnly)
+    
     {
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return View(new List<Product>());
-        }
-
-        var products = await _context.Products
+        var productsQuery = _context.Products
             .Include(p => p.ProductPictures)
-            .Include(p => p.ProductCategories)
-                .ThenInclude(pc => pc.Category)
-            .Where(p =>
-                (p.ProductName != null && p.ProductName.Contains(query)) ||
-                (p.ProductDescription != null && p.ProductDescription.Contains(query))
-            )
-            .ToListAsync();
+            .Include(p => p.ProductCategories).ThenInclude(pc => pc.Category)
+            .Include(p => p.ProductTags).ThenInclude(pt => pt.Tag)
+            .Include(p => p.PhysicalProductAttributes).ThenInclude(pa => pa.PhysicalAttribute)
+            .AsQueryable();
 
         ViewData["SearchQuery"] = query;
+        
+        // Search text
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            productsQuery = productsQuery.Where(p =>
+                (p.ProductName != null && p.ProductName.ToLower().Contains(query)) ||
+                (p.ProductDescription != null && p.ProductDescription.ToLower().Contains(query)));
+        }
+
+        // Filter by Category
+        if (categoryIds != null && categoryIds.Any())
+            productsQuery = productsQuery.Where(p =>
+                p.ProductCategories.Any(pc => categoryIds.Contains(pc.CategoryId)));
+
+        // Filter by Tag
+        if (tagId.HasValue)
+            productsQuery = productsQuery.Where(p =>
+                p.ProductTags.Any(pt => pt.TagId == tagId.Value));
+
+        // Filter by Size (PhysicalAttribute)
+        if (sizeId.HasValue)
+            productsQuery = productsQuery.Where(p =>
+                p.PhysicalProductAttributes.Any(pa => pa.PhysicalAttributeId == sizeId.Value));
+
+        // Filter by Price range
+        if (minPrice.HasValue)
+            productsQuery = productsQuery.Where(p => p.ProductPrice >= minPrice.Value);
+
+        if (maxPrice.HasValue)
+            productsQuery = productsQuery.Where(p => p.ProductPrice <= maxPrice.Value);
+
+        // Filter by discount
+        if (discountOnly == true)
+            productsQuery = productsQuery.Where(p => p.ProductCampaignPrice != null);
+
+        // Filter by availability
+        if (inStockOnly == true)
+            productsQuery = productsQuery.Where(p => p.StockCount > 0);
+
+        var products = await productsQuery.ToListAsync();
+
+        // Populate dropdown data for the filter bar
+        ViewData["Categories"] = await _context.Categories.ToListAsync();
+        ViewData["Tags"] = await _context.Tags.ToListAsync();
+        ViewData["Sizes"] = await _context.PhysicalAttributes.ToListAsync();
+        ViewData["SelectedCategoryIds"] = categoryIds ?? new List<int>();
+        ViewData["SearchQuery"] = query;
+
         return View(products);
     }
 }
