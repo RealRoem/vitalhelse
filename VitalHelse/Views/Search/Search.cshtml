@@ -19,7 +19,7 @@
                                        value="@parent.CategoryId"
                                        @( ((List<int>)ViewData["SelectedCategoryIds"]).Contains(parent.CategoryId) ? "checked" : "" ) />
                                 <span class="parent-name">@parent.CategoryName</span>
-                                <!-- &#9660 is a down arrow Icon -->
+                                <!-- &#9660 is a down arrow Icon, prob dont need it with css added  -->
                                 <span class="toggle-icon">&#9660;</span>
                             </div>
 
@@ -41,7 +41,7 @@
                 </div>
             </div>
 
-            <!-- Tags -->
+            <!-- Tags (if we want to use it)
             <div class="filter-group">
                 <label for="tag">Tag</label>
                 <select id="tag" name="tagId" class="form-select">
@@ -51,7 +51,8 @@
                         <option value="@t.TagId">@t.Tags</option>
                     }
                 </select>
-            </div>
+            </div> -->
+           
 
             <!-- Size -->
             <div class="filter-group">
