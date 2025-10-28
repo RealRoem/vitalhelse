@@ -140,6 +140,12 @@ public class SearchController : Controller
         ViewData["Tags"] = await _context.Tags.ToListAsync();
         ViewData["Sizes"] = await _context.PhysicalAttributes.ToListAsync();
         ViewData["SelectedCategoryIds"] = categoryIds ?? new List<int>();
+        //ViewData["SelectedTagId"] = tagId;
+        ViewData["SelectedSizeId"] = sizeId;
+        ViewData["SelectedMinPrice"] = minPrice;
+        ViewData["SelectedMaxPrice"] = maxPrice;
+        ViewData["SelectedDiscountOnly"] = discountOnly ?? false;
+        ViewData["SelectedInStockOnly"] = inStockOnly ?? false;
         ViewData["SearchQuery"] = query;
 
         return View(products);

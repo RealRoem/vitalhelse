@@ -58,31 +58,43 @@
             <div class="filter-group">
                 <label for="size">Størrelse</label>
                 <select id="size" name="sizeId" class="form-select">
-                    <option value="">Alle</option>
+                    <!option value="" selected="@(ViewData["SelectedSizeId"] == null ? "selected" : null)">Alle</!option>
                     @foreach (var s in (IEnumerable<PhysicalAttribute>)ViewData["Sizes"])
                     {
-                        <option value="@s.PhysicalAttributeId">@s.Attribute</option>
+                        <!option value="@s.PhysicalAttributeId" selected="@(ViewData["SelectedSizeId"] != null && (int)ViewData["SelectedSizeId"] == s.PhysicalAttributeId ? "selected" : null)">
+                            @s.Attribute
+                        </!option>
                     }
                 </select>
             </div>
+
+
+
+
 
             <!-- Price -->
             <div class="filter-group price-range">
                 <label>Pris</label>
                 <div class="price-inputs">
-                    <input type="number" name="minPrice" placeholder="Min" class="form-control"/>
-                    <input type="number" name="maxPrice" placeholder="Maks" class="form-control"/>
+                    <input type="number" name="minPrice" placeholder="Min" class="form-control"
+                           value="@(ViewData["SelectedMinPrice"] ?? "")" />
+                    <input type="number" name="maxPrice" placeholder="Maks" class="form-control"
+                           value="@(ViewData["SelectedMaxPrice"] ?? "")"/>
                 </div>
             </div>
 
             <!-- Toggles -->
             <div class="filter-group toggles">
+                
                 <label>
-                    <input type="checkbox" name="discountOnly" value="true"/> På tilbud
+                    <input type="checkbox" name="discountOnly" value="true"
+                           @((bool)ViewData["SelectedDiscountOnly"] ? "checked" : "")/> På tilbud
                 </label>
                 <label>
-                    <input type="checkbox" name="inStockOnly" value="true"/> På lager
+                    <input type="checkbox" name="inStockOnly" value="true"
+                           @((bool)ViewData["SelectedInStockOnly"] ? "checked" : "")/> På lager
                 </label>
+
             </div>
 
             <button type="submit" class="btn btn-primary w-100 mt-2">Filtrer</button>
