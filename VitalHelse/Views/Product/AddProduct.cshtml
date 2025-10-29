@@ -72,12 +72,18 @@
         <span asp-validation-for="Product.StockCount" class="text-danger"></span>
     </div>
 
-    <div class="form-group mb-3">
-        <label class="form-label">Etiketter</label>
-        <div id="tag-input-container" class="tag-input-container">
-            <input type="text" id="tagInput" class="tag-input" placeholder="Skriv inn og trykk enter">
+    <div class="form-group">
+        <label for="tag-input">Tags</label>
+        <div class="tag-input-container" id="tag-input-container">
+            <input type="text" id="tag-input" class="tag-input" placeholder="Type tag and press Enter" />
         </div>
-        <input type="hidden" name="TagNames" id="hiddenTags" />
+    </div>
+    
+    <div id="hidden-tags-container">
+        @foreach (var tag in Model.Tags)
+        {
+            <input type="hidden" name="Tags" value="@tag" />
+        }
     </div>
 
 
@@ -131,7 +137,7 @@
             options.style.display = options.style.display === 'block' ? 'none' : 'block';
         });
 
-        // Close dropdown if clicked outside
+        //close dropdown if clicked outside
         document.addEventListener('click', (e) => {
             if (!dropdown.contains(e.target)) {
                 options.style.display = 'none';
@@ -140,46 +146,110 @@
     });
     </script>
     
-    <script>
-const tagInput = document.getElementById('tagInput');
-const tagContainer = document.getElementById('tag-input-container');
-const hiddenTags = document.getElementById('hiddenTags');
-let tags = [];
+ <script>
+     const tagInput = document.getElementById('tag-input'); 
+     const tagContainer = document.getElementById('tag-input-container');
+     const hiddenTagsContainer = document.getElementById('hidden-tags-container'); 
+     const form = tagInput.closest('form');
+     let tags = [];
 
-tagInput.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && tagInput.value.trim() !== '') {
-        e.preventDefault();
-        const tagText = tagInput.value.trim();
+     // C# tags list
+     const allTags = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AllTags ?? new List<string>()));
 
-        if (!tags.includes(tagText)) {
-            tags.push(tagText);
-            renderTags();
-        }
+     let suggestionBox;
 
-        tagInput.value = '';
-    }
-        });
+     // Handle Enter in tag input
+     tagInput.addEventListener('keydown', function (e) {
+         if (e.key === 'Enter') {
+             e.preventDefault(); // stop form submission
+             e.stopPropagation();
 
-function renderTags() {
-    const existingTags = tagContainer.querySelectorAll('.tag');
-    existingTags.forEach(tag => tag.remove());
+             const value = tagInput.value.trim();
+             if (value !== '') {
+                 addTag(value);
+                 tagInput.value = '';
+                 hideSuggestions();
+             }
+         }
+});
 
-    tags.forEach(tag => {
-        const tagEl = document.createElement('div');
-        tagEl.classList.add('tag');
-        tagEl.innerHTML = `${tag} <span class="remove-tag">&times;</span>`;
+     // Input for autocomplete
+     tagInput.addEventListener('input', function () {
+         const inputValue = tagInput.value.toLowerCase();
+         const filtered = allTags.filter(tag => tag.toLowerCase().includes(inputValue) && !tags.includes(tag));
+         if (filtered.length > 0 && inputValue.length > 0) {
+             showSuggestions(filtered);
+         } else {
+             hideSuggestions();
+         }
+});
 
-        tagEl.querySelector('.remove-tag').addEventListener('click', () => {
-            tags = tags.filter(t => t !== tag);
-            renderTags();
-        });
-
-        tagContainer.insertBefore(tagEl, tagInput);
-    });
-
-    hiddenTags.value = tags.join(',');
+     function addTag(tagText) {
+         if (!tags.includes(tagText)) {
+             tags.push(tagText);
+             renderTags();
+         }
 }
+
+     function showSuggestions(filtered) {
+         hideSuggestions();
+         suggestionBox = document.createElement('div');
+         suggestionBox.classList.add('suggestion-box');
+         filtered.forEach(tag => {
+             const option = document.createElement('div');
+             option.textContent = tag;
+             option.classList.add('suggestion-item');
+             option.addEventListener('click', () => {
+                 addTag(tag);
+                 tagInput.value = '';
+                 hideSuggestions();
+             });
+             suggestionBox.appendChild(option);
+         });
+         tagContainer.appendChild(suggestionBox);
+     }
+
+     function hideSuggestions() {
+         if (suggestionBox) suggestionBox.remove();
+         suggestionBox = null;
+     }
+
+     function renderTags() {
+         const existingTags = tagContainer.querySelectorAll('.tag');
+         existingTags.forEach(t => t.remove());
+         hiddenTagsContainer.innerHTML = '';
+
+         tags.forEach(tag => {
+             // visible tag bubble
+             const tagEl = document.createElement('div');
+             tagEl.classList.add('tag');
+             tagEl.innerHTML = `${tag} <span class="remove-tag">&times;</span>`;
+             tagEl.querySelector('.remove-tag').addEventListener('click', () => {
+                 tags = tags.filter(t => t !== tag);
+                 renderTags();
+             });
+             tagContainer.insertBefore(tagEl, tagInput);
+
+             // hidden input for form
+             const hiddenInput = document.createElement('input');
+             hiddenInput.type = 'hidden';
+             hiddenInput.name = 'Tags';
+             hiddenInput.value = tag;
+             hiddenTagsContainer.appendChild(hiddenInput);
+         });
+     }
+
+     // Hide suggestions on click outside
+     document.addEventListener('click', (e) => {
+         if (!tagContainer.contains(e.target)) hideSuggestions();
+     });
+
 </script>
+
+
+
+
+
 
     
 

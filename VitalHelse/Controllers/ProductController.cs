@@ -167,6 +167,8 @@ public class ProductController : Controller
             AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList()
         };
         
+        ViewBag.AllTags = _db.Tags.Select(t => t.Tags).ToList();
+        
         return View(viewmodel);
     }
 
@@ -230,6 +232,28 @@ public class ProductController : Controller
                 {
                     ProductId = model.Product.ProductId,
                     CategoryId = categoryId
+                });
+            }
+        }
+        
+        if (model.Tags != null && model.Tags.Any())
+        {
+            foreach (var tagName in model.Tags)
+            {
+                //Check if the tag already exists
+                var tag = await _db.Tags.FirstOrDefaultAsync(t => t.Tags == tagName);
+                if (tag == null)
+                {
+                    tag = new Tag { Tags = tagName };
+                    _db.Tags.Add(tag);
+                    await _db.SaveChangesAsync(); 
+                }
+
+                //Add relation in ProductTags
+                _db.ProductTags.Add(new ProductTags
+                {
+                    ProductId = model.Product.ProductId,
+                    TagId = tag.TagId
                 });
             }
         }

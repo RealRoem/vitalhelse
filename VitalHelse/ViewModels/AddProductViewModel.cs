@@ -7,5 +7,5 @@ public class AddProductViewModel
     public List<int> SelectedCategoryIds { get; set; } = new();
     public string TempID { get; set; } = Guid.NewGuid().ToString(); 
     
-    public List<string> TagNames { get; set; } = new();
+    public List<string> Tags { get; set; } = new List<string>();
 }

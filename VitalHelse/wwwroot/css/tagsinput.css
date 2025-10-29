@@ -39,3 +39,30 @@
     color: #aaa;
 }
 
+ .suggestion-box {
+     position: absolute;
+     background: white;
+     border: 1px solid #ccc;
+     border-radius: 4px;
+     margin-top: 5px;
+     width: 100%;
+     max-height: 150px;
+     overflow-y: auto;
+     z-index: 10;
+     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+ }
+
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.suggestion-item:hover {
+    background-color: #007bff;
+    color: white;
+}
+
+.tag-input-container {
+    position: relative;
+}
