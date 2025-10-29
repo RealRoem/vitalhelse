@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -156,5 +157,68 @@ public class ProductController : Controller
         return PartialView("_ProductGrid", products);
     }
 
+    [HttpGet]
+    [Authorize(Roles = "Admin,Staff")]
+    public IActionResult AddProduct()
+    {
+        return View();
+    }
+
+    [HttpPost]
+    [Authorize(Roles = "Admin,Staff")]
+    public async Task<IActionResult> UploadPicture(IFormFile file, string? tempID)
+    {
+        if (file == null || file.Length == 0)
+        {return BadRequest("No Image Uploaded");}
+        
+        var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/products");
+
+        var fileName = $"{Guid.NewGuid()}.{Path.GetExtension(file.FileName)}";
+        var filePath = Path.Combine(uploadPath, fileName);
+        
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream);
+        }
+        
+        var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(tempID ?? "temp_pictures") ?? new List<string>();
+        tempPictures.Add($"/images/products/{fileName}");
+        HttpContext.Session.SetObjectAsJson(tempID, tempPictures);
+
+        return Json(new { success = true, path = $"/images/products/{fileName}" });
+    }
+
+    [HttpPost]
+    [Authorize(Roles = "Admin,Staff")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddProduct(Product model, string tempID)
+    {
+        if (!ModelState.IsValid)
+            return View(model);
+
+        _db.Products.Add(model);
+        await _db.SaveChangesAsync();
+
+        //saves uploaded pictures
+        var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(tempID) ?? new List<string>();
+        foreach (var path in tempPictures)
+        {
+            var picture = new ProductPicture
+            {
+                ProductId = model.ProductId,
+                PicturePath = path
+            };
+            _db.ProductPictures.Add(picture);
+        }
+
+        await _db.SaveChangesAsync();
+
+        //clears session
+        HttpContext.Session.Remove(tempID);
+
+        return RedirectToAction("Index", new { id = model.ProductId });
+    }
+
 
 }
+

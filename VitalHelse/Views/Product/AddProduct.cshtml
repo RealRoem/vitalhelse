@@ -1,0 +1,95 @@
+@model VitalHelse.Models.Product
+
+@{
+    var tempID = Guid.NewGuid().ToString();
+}
+
+@{
+    ViewData["Title"] = "Add Product";
+}
+
+<h2>@ViewData["Title"]</h2>
+
+<form asp-action="AddProduct" method="post">
+    <div class="form-group mb-3">
+        <input type="hidden" name="tempID" value="@tempID" id="tempID" />
+        <label>Product Pictures</label>
+        <button type="button" class="btn btn-secondary" id="uploadButton">Add Pictures</button>
+        <div id="previewImages" class="mt-2"></div>
+    </div>
+    <div class="form-group mb-3">
+        <label asp-for="ProductName" class="form-label"></label>
+        <input asp-for="ProductName" class="form-control"/>
+        <span asp-validation-for="ProductName" class="text-danger"></span>
+    </div>
+
+    <div class="form-group mb-3">
+        <label asp-for="ProductDescription" class="form-label"></label>
+        <textarea asp-for="ProductDescription" class="form-control"></textarea>
+        <span asp-validation-for="ProductDescription" class="text-danger"></span>
+    </div>
+
+    <div class="form-group mb-3">
+        <label asp-for="ProductPrice" class="form-label"></label>
+        <input asp-for="ProductPrice" class="form-control"/>
+        <span asp-validation-for="ProductPrice" class="text-danger"></span>
+    </div>
+
+    <div class="form-group mb-3">
+        <label asp-for="ProductCampaignPrice" class="form-label"></label>
+        <input asp-for="ProductCampaignPrice" class="form-control"/>
+        <span asp-validation-for="ProductCampaignPrice" class="text-danger"></span>
+    </div>
+
+    <div class="form-group mb-3">
+        <label asp-for="StockCount" class="form-label"></label>
+        <input asp-for="StockCount" class="form-control"/>
+        <span asp-validation-for="StockCount" class="text-danger"></span>
+    </div>
+
+    <div class="form-group mb-3">
+        <label asp-for="LabelDescription" class="form-label"></label>
+        <input asp-for="LabelDescription" class="form-control"/>
+        <span asp-validation-for="LabelDescription" class="text-danger"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save Product</button>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        const tempID = document.getElementById('tempID').value;
+
+        document.getElementById('uploadButton').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.click();
+
+            input.onchange = () => {
+                for (let file of input.files) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('tempID', tempID);
+
+                    fetch('/Product/UploadPicture', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            const img = document.createElement('img');
+                            img.src = data.path;
+                            img.style.maxWidth = '150px';
+                            img.style.margin = '5px';
+                            document.getElementById('previewImages').appendChild(img);
+                        }
+                    });
+                }
+            };
+        });
+    </script>
+}

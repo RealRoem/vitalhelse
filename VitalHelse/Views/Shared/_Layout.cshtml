@@ -63,6 +63,13 @@
 
                 <!-- Midten: logo -->
                 <a class="navbar-brand vital-logo" asp-controller="Home" asp-action="Index">VitalHelse</a>
+                
+                <!-- if admin or staff, the add product link shows-->
+                @if (User.IsInRole("Admin") || User.IsInRole("Staff"))
+                {
+                    <a class="addproduct" asp-controller="Product" asp-action="AddProduct">Legg til et produkt</a>
+                }
+               
 
                 <!-- Høyre: ikoner -->
                 <div class="nav-icons">
