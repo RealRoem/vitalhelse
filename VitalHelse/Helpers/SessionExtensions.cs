@@ -15,8 +15,7 @@ namespace VitalHelse.Helpers
             var value = session.GetString(typeof(T).FullName);
             return value == null ? default : JsonSerializer.Deserialize<T>(value);
         }
-
-        // Optional overload to use custom key
+        
         public static T? GetObjectFromJson<T>(this ISession session, string key)
         {
             var value = session.GetString(key);

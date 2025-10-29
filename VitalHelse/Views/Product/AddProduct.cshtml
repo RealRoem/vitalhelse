@@ -1,4 +1,6 @@
-@model VitalHelse.Models.Product
+
+@model VitalHelse.Models.AddProductViewModel
+
 
 @{
     var tempID = Guid.NewGuid().ToString();
@@ -12,54 +14,81 @@
 
 <form asp-action="AddProduct" method="post">
     <div class="form-group mb-3">
-        <input type="hidden" name="tempID" value="@tempID" id="tempID" />
-        <label>Product Pictures</label>
-        <button type="button" class="btn btn-secondary" id="uploadButton">Add Pictures</button>
+        <input type="hidden" asp-for="TempID" id="TempID" />
+        <label>Produkt Bilder</label>
+        <button type="button" class="btn btn-secondary" id="uploadButton">Legg til bilder</button>
         <div id="previewImages" class="mt-2"></div>
     </div>
     <div class="form-group mb-3">
-        <label asp-for="ProductName" class="form-label"></label>
-        <input asp-for="ProductName" class="form-control"/>
-        <span asp-validation-for="ProductName" class="text-danger"></span>
+        <label asp-for="Product.ProductName" class="form-label">Produkt navn</label>
+        <input asp-for="Product.ProductName" class="form-control"/>
+        <span asp-validation-for="Product.ProductName" class="text-danger"></span>
     </div>
 
     <div class="form-group mb-3">
-        <label asp-for="ProductDescription" class="form-label"></label>
-        <textarea asp-for="ProductDescription" class="form-control"></textarea>
-        <span asp-validation-for="ProductDescription" class="text-danger"></span>
+        <label asp-for="Product.ProductDescription" class="form-label">Produkt Beskrivelse</label>
+        <textarea asp-for="Product.ProductDescription" class="form-control"></textarea>
+        <span asp-validation-for="Product.ProductDescription" class="text-danger"></span>
+    </div>
+    
+    <div class="form-group mb-3">
+        <label asp-for="Product.ProductIngredients" class="form-label">Ingredienser</label>
+        <textarea asp-for="Product.ProductIngredients" class="form-control" rows="3" placeholder="Skriv ingrediensene her..."></textarea>
+        <span asp-validation-for="Product.ProductIngredients" class="text-danger"></span>
     </div>
 
     <div class="form-group mb-3">
-        <label asp-for="ProductPrice" class="form-label"></label>
-        <input asp-for="ProductPrice" class="form-control"/>
-        <span asp-validation-for="ProductPrice" class="text-danger"></span>
+        <label asp-for="Product.ProductPrice" class="form-label">Produkt Pris</label>
+        <input asp-for="Product.ProductPrice" class="form-control"/>
+        <span asp-validation-for="Product.ProductPrice" class="text-danger"></span>
+    </div>
+    
+    <div class="form-group mb-3">
+        <label for="categories">Kategorier</label>
+        <div class="dropdown-checkbox" id="categoryDropdown">
+            <div class="dropdown-selected">Velg Kategorier</div>
+            <div class="dropdown-options">
+                @foreach (var category in Model.AllCategories)
+                {
+                    <label class="dropdown-option-item">
+                        <span class="category-name">@category.CategoryName</span>
+                        <input type="checkbox" name="SelectedCategoryIds" value="@category.CategoryId" />
+                    </label>
+                }
+            </div>
+        </div>
+    </div>
+
+
+    <div class="form-group mb-3">
+        <label asp-for="Product.ProductCampaignPrice" class="form-label">Kampanje Pris</label>
+        <input asp-for="Product.ProductCampaignPrice" class="form-control"/>
+        <span asp-validation-for="Product.ProductCampaignPrice" class="text-danger"></span>
     </div>
 
     <div class="form-group mb-3">
-        <label asp-for="ProductCampaignPrice" class="form-label"></label>
-        <input asp-for="ProductCampaignPrice" class="form-control"/>
-        <span asp-validation-for="ProductCampaignPrice" class="text-danger"></span>
+        <label asp-for="Product.StockCount" class="form-label">Lager Beholdning</label>
+        <input asp-for="Product.StockCount" class="form-control"/>
+        <span asp-validation-for="Product.StockCount" class="text-danger"></span>
     </div>
 
     <div class="form-group mb-3">
-        <label asp-for="StockCount" class="form-label"></label>
-        <input asp-for="StockCount" class="form-control"/>
-        <span asp-validation-for="StockCount" class="text-danger"></span>
+        <label class="form-label">Etiketter</label>
+        <div id="tag-input-container" class="tag-input-container">
+            <input type="text" id="tagInput" class="tag-input" placeholder="Skriv inn og trykk enter">
+        </div>
+        <input type="hidden" name="TagNames" id="hiddenTags" />
     </div>
 
-    <div class="form-group mb-3">
-        <label asp-for="LabelDescription" class="form-label"></label>
-        <input asp-for="LabelDescription" class="form-control"/>
-        <span asp-validation-for="LabelDescription" class="text-danger"></span>
-    </div>
 
-    <button type="submit" class="btn btn-primary">Save Product</button>
+    <button type="submit" class="btn btn-primary">Lagre Produkt</button>
 </form>
 
+<!-- to be moved to partial-->
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
+    <partial name="_ValidationScriptsPartial"/>
     <script>
-        const tempID = document.getElementById('tempID').value;
+        const TempID = document.getElementById('TempID').value;
 
         document.getElementById('uploadButton').addEventListener('click', () => {
             const input = document.createElement('input');
@@ -72,7 +101,7 @@
                 for (let file of input.files) {
                     const formData = new FormData();
                     formData.append('file', file);
-                    formData.append('tempID', tempID);
+                    formData.append('TempID', TempID);
 
                     fetch('/Product/UploadPicture', {
                         method: 'POST',
@@ -92,4 +121,66 @@
             };
         });
     </script>
+
+    <script>
+    document.querySelectorAll('.dropdown-checkbox').forEach(dropdown => {
+        const selected = dropdown.querySelector('.dropdown-selected');
+        const options = dropdown.querySelector('.dropdown-options');
+
+        selected.addEventListener('click', () => {
+            options.style.display = options.style.display === 'block' ? 'none' : 'block';
+        });
+
+        // Close dropdown if clicked outside
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target)) {
+                options.style.display = 'none';
+            }
+        });
+    });
+    </script>
+    
+    <script>
+const tagInput = document.getElementById('tagInput');
+const tagContainer = document.getElementById('tag-input-container');
+const hiddenTags = document.getElementById('hiddenTags');
+let tags = [];
+
+tagInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && tagInput.value.trim() !== '') {
+        e.preventDefault();
+        const tagText = tagInput.value.trim();
+
+        if (!tags.includes(tagText)) {
+            tags.push(tagText);
+            renderTags();
+        }
+
+        tagInput.value = '';
+    }
+        });
+
+function renderTags() {
+    const existingTags = tagContainer.querySelectorAll('.tag');
+    existingTags.forEach(tag => tag.remove());
+
+    tags.forEach(tag => {
+        const tagEl = document.createElement('div');
+        tagEl.classList.add('tag');
+        tagEl.innerHTML = `${tag} <span class="remove-tag">&times;</span>`;
+
+        tagEl.querySelector('.remove-tag').addEventListener('click', () => {
+            tags = tags.filter(t => t !== tag);
+            renderTags();
+        });
+
+        tagContainer.insertBefore(tagEl, tagInput);
+    });
+
+    hiddenTags.value = tags.join(',');
+}
+</script>
+
+    
+
 }

@@ -7,6 +7,7 @@ using VitalHelse.Data;
 using VitalHelse.Helpers;
 using VitalHelse.Models;
 
+
 namespace VitalHelse.Controllers;
 
 public class ProductController : Controller
@@ -161,7 +162,12 @@ public class ProductController : Controller
     [Authorize(Roles = "Admin,Staff")]
     public IActionResult AddProduct()
     {
-        return View();
+        var viewmodel = new AddProductViewModel
+        {
+            AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList()
+        };
+        
+        return View(viewmodel);
     }
 
     [HttpPost]
@@ -191,34 +197,52 @@ public class ProductController : Controller
     [HttpPost]
     [Authorize(Roles = "Admin,Staff")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddProduct(Product model, string tempID)
+    public async Task<IActionResult> AddProduct(AddProductViewModel model)
     {
         if (!ModelState.IsValid)
+        {
+            model.AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList();
             return View(model);
+        }
 
-        _db.Products.Add(model);
+        //Save the product
+        _db.Products.Add(model.Product);
         await _db.SaveChangesAsync();
 
-        //saves uploaded pictures
-        var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(tempID) ?? new List<string>();
+        //Save uploaded pictures
+        var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(model.TempID) ?? new List<string>();
         foreach (var path in tempPictures)
         {
             var picture = new ProductPicture
             {
-                ProductId = model.ProductId,
+                ProductId = model.Product.ProductId,
                 PicturePath = path
             };
             _db.ProductPictures.Add(picture);
         }
 
+        //save selected categories
+        if (model.SelectedCategoryIds != null && model.SelectedCategoryIds.Any())
+        {
+            foreach (var categoryId in model.SelectedCategoryIds)
+            {
+                _db.ProductCategories.Add(new ProductCategory
+                {
+                    ProductId = model.Product.ProductId,
+                    CategoryId = categoryId
+                });
+            }
+        }
+
         await _db.SaveChangesAsync();
 
-        //clears session
-        HttpContext.Session.Remove(tempID);
+        //Clear session
+        HttpContext.Session.Remove(model.TempID);
 
-        return RedirectToAction("Index", new { id = model.ProductId });
+        return RedirectToAction("Index", new { id = model.Product.ProductId });
     }
 
+//todo: index for users trying to access page without being logged in
 
 }
 
