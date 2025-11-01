@@ -1,3 +1,4 @@
+/* Product form dropdown checkbox functionality */
 
 (function() {
     'use strict';

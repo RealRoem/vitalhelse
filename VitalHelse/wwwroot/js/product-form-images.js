@@ -1,3 +1,4 @@
+/* Product form image upload and management */
 (function() {
     'use strict';
 

@@ -8,7 +8,7 @@ ViewData["Title"] = isEditMode ? "Edit Product" : "Add Product";
 
 <h2>@ViewData["Title"]</h2>
 
-<form asp-action="AddProduct" method="post">
+<form asp-action="SaveProduct" method="post">
     @Html.AntiForgeryToken()
 
     @if (isEditMode)
@@ -151,19 +151,19 @@ ViewData["Title"] = isEditMode ? "Edit Product" : "Add Product";
     
     <script>
 
-        window.existingProductImages = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ExistingImages ?? new List<string>()));
+        window.existingProductImages = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ExistingImagePaths ?? new List<string>()));
         window.productTags = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Tags ?? new List<string>()));
-        window.allProductTags = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AllTags ?? new List<string>()));
+        window.allProductTags = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AllTags ?? new List<string>()));
 
     </script>
     
-    <script src="~/js/productDropdown.js" asp-append-version="true"></script>
-    <script src="~/js/productTagIpnut.js" asp-append-version="true"></script>
-    <script src="~/js/productImageUpload.js" asp-append-version="true"></script>
+    <script src="~/js/product-form-dropdown.js" asp-append-version="true"></script>
+    <script src="~/js/product-form-tags.js" asp-append-version="true"></script>
+    <script src="~/js/product-form-images.js" asp-append-version="true"></script>
     
     @if (isEditMode)
     {
-        <script src="~/js/productDelete.js" asp-append-version="true"></script>
+        <script src="~/js/product-form-delete.js" asp-append-version="true"></script>
     }
   
 }

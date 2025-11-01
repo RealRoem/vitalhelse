@@ -159,347 +159,338 @@ public class ProductController : Controller
     }
 
     [HttpGet]
-    [Authorize(Roles = "Admin,Staff")]
-    public IActionResult AddProduct()
+[Authorize(Roles = "Admin,Staff")]
+public IActionResult AddProduct()
+{
+    var viewmodel = new ProductFormViewModel
     {
-        var viewmodel = new ProductFormViewModel
-        {
-            AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList(),
-            AllPhysicalAttributes = _db.PhysicalAttributes.OrderBy(p => p.Attribute).ToList()
-
-            
-        };
-        
-        ViewBag.AllTags = _db.Tags.Select(t => t.Tags).ToList();
-        
-        return View(viewmodel);
-    }
+        AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList(),
+        AllPhysicalAttributes = _db.PhysicalAttributes.OrderBy(p => p.Attribute).ToList(),
+        AllTags = _db.Tags.Select(t => t.Tags).ToList()
+    };
     
-   
-    [HttpPost]
-    [Authorize(Roles = "Admin,Staff")]
-    public async Task<IActionResult> UploadPicture(IFormFile file, string? tempID) 
+    return View("ProductForm",viewmodel);
+}
+
+[HttpPost]
+[Authorize(Roles = "Admin,Staff")]
+public async Task<IActionResult> UploadPicture(IFormFile file, string? tempID) 
+{
+    if (file == null || file.Length == 0) 
+        return Json(new { success = false, error = "No Image Uploaded" });
+
+    // Validate file type
+    var allowedMimeTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif" };
+    if (!allowedMimeTypes.Contains(file.ContentType.ToLower()))
+    { 
+        return Json(new { success = false, error = "Unsupported file format" });
+    }
+
+    // Validate file size (10MB max)
+    if (file.Length > 10 * 1024 * 1024)
     {
-        if (file == null || file.Length == 0) 
-            return Json(new { success = false, error = "No Image Uploaded" });
+        return Json(new { success = false, error = "File is too large (max 10MB)" });
+    }
 
-        // Validate file type
-        var allowedMimeTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif" };
-        if (!allowedMimeTypes.Contains(file.ContentType.ToLower()))
-        { 
-            return Json(new { success = false, error = "Unsupported file format" });
-        }
+    var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/products");
+    
+    // Ensure directory exists
+    if (!Directory.Exists(uploadPath))
+    {
+        Directory.CreateDirectory(uploadPath);
+    }
 
-        // Validate file size (10MB max)
-        if (file.Length > 10 * 1024 * 1024)
+    // Get proper extension based on content type
+    var extension = file.ContentType.ToLower() switch
+    {
+        "image/jpeg" => ".jpg",
+        "image/png" => ".png",
+        "image/gif" => ".gif",
+        "image/webp" => ".webp",
+        "image/avif" => ".avif",
+        _ => Path.GetExtension(file.FileName)
+    };
+
+    // Use GUID for filename to avoid any special character issues
+    var fileName = $"{Guid.NewGuid()}{extension}";
+    var filePath = Path.Combine(uploadPath, fileName);
+
+    try
+    {
+        using (var stream = new FileStream(filePath, FileMode.Create))
         {
-            return Json(new { success = false, error = "File is too large (max 10MB)" });
+            await file.CopyToAsync(stream);
         }
 
-        var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/products");
+        var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(tempID ?? "temp_pictures") ?? new List<string>();
+        tempPictures.Add($"/images/products/{fileName}");
+        HttpContext.Session.SetObjectAsJson(tempID ?? "temp_pictures", tempPictures);
+
+        return Json(new { success = true, path = $"/images/products/{fileName}" });
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Failed to upload image");
         
-        // Ensure directory exists
-        if (!Directory.Exists(uploadPath))
+        // Clean up file if it was partially written
+        if (System.IO.File.Exists(filePath))
         {
-            Directory.CreateDirectory(uploadPath);
+            System.IO.File.Delete(filePath);
         }
+        
+        return Json(new { success = false, error = "Failed to save image" });
+    }
+}
 
-        // Get proper extension based on content type
-        var extension = file.ContentType.ToLower() switch
-        {
-            "image/jpeg" => ".jpg",
-            "image/png" => ".png",
-            "image/gif" => ".gif",
-            "image/webp" => ".webp",
-            "image/avif" => ".avif",
-            _ => Path.GetExtension(file.FileName)
-        };
+[HttpPost]
+[Authorize(Roles = "Admin,Staff")]
+[ValidateAntiForgeryToken]
+public IActionResult DeleteTempPicture(string imagePath, string? tempID)
+{
+    if (string.IsNullOrEmpty(imagePath))
+        return BadRequest("Invalid image path");
 
-        // Use GUID for filename to avoid any special character issues
-        var fileName = $"{Guid.NewGuid()}{extension}";
-        var filePath = Path.Combine(uploadPath, fileName);
+    var sessionKey = tempID ?? "temp_pictures";
+    var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(sessionKey) ?? new List<string>();
 
+    // Remove the image path from the session list
+    tempPictures.Remove(imagePath);
+    HttpContext.Session.SetObjectAsJson(sessionKey, tempPictures);
+
+    // Delete file from disk
+    var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imagePath.TrimStart('/'));
+    if (System.IO.File.Exists(fullPath))
+    {
         try
         {
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(tempID ?? "temp_pictures") ?? new List<string>();
-            tempPictures.Add($"/images/products/{fileName}");
-            HttpContext.Session.SetObjectAsJson(tempID ?? "temp_pictures", tempPictures);
-
-            return Json(new { success = true, path = $"/images/products/{fileName}" });
+            System.IO.File.Delete(fullPath);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to upload image");
-            
-            // Clean up file if it was partially written
-            if (System.IO.File.Exists(filePath))
-            {
-                System.IO.File.Delete(filePath);
-            }
-            
-            return Json(new { success = false, error = "Failed to save image" });
+            _logger.LogError(ex, "Failed to delete file: {Path}", fullPath);
+            return Json(new { success = false, error = "Failed to delete file from disk" });
         }
     }
 
-    
-    [HttpPost]
-    [Authorize(Roles = "Admin,Staff")]
-    [ValidateAntiForgeryToken]
-    public IActionResult DeleteTempPicture(string imagePath, string? tempID)
+    return Json(new { success = true });
+}
+
+[HttpPost]
+[Authorize(Roles = "Admin,Staff")]
+[ValidateAntiForgeryToken]
+public async Task<IActionResult> SaveProduct(ProductFormViewModel model)
+{
+    if (!ModelState.IsValid)
     {
-        if (string.IsNullOrEmpty(imagePath))
-            return BadRequest("Invalid image path");
-
-        var sessionKey = tempID ?? "temp_pictures";
-        var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(sessionKey) ?? new List<string>();
-
-        // Remove the image path from the session list
-        tempPictures.Remove(imagePath);
-        HttpContext.Session.SetObjectAsJson(sessionKey, tempPictures);
-
-        // Delete file from disk
-        var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imagePath.TrimStart('/'));
-        if (System.IO.File.Exists(fullPath))
-        {
-            try
-            {
-                System.IO.File.Delete(fullPath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to delete file: {Path}", fullPath);
-                return Json(new { success = false, error = "Failed to delete file from disk" });
-            }
-        }
-
-        return Json(new { success = true });
+        // Repopulate dropdown lists if validation fails
+        model.AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList();
+        model.AllPhysicalAttributes = _db.PhysicalAttributes.OrderBy(p => p.Attribute).ToList();
+        model.AllTags = _db.Tags.Select(t => t.Tags).ToList();
+        
+        // Repopulate existing images from session
+        model.ExistingImagePaths = HttpContext.Session.GetObjectFromJson<List<string>>(model.TempID) ?? new List<string>();
+        
+        return View("ProductForm", model);
     }
 
+    Product product;
 
-    [HttpPost]
-    [Authorize(Roles = "Admin,Staff")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddProduct(ProductFormViewModel model)
+    // If ProductId exists, update instead of creating
+    if (model.Product.ProductId > 0)
     {
-        if (!ModelState.IsValid)
+        product = await _db.Products
+            .Include(p => p.ProductCategories)
+            .Include(p => p.ProductTags)
+            .Include(p => p.PhysicalProductAttributes)
+            .Include(p => p.ProductPictures)
+            .FirstOrDefaultAsync(p => p.ProductId == model.Product.ProductId);
+
+        if (product == null)
+            return NotFound();
+
+        // Update properties
+        product.ProductName = model.Product.ProductName;
+        product.ProductDescription = model.Product.ProductDescription;
+        product.ProductInstructions = model.Product.ProductInstructions;
+        product.ProductIngredients = model.Product.ProductIngredients;
+        product.ProductPrice = model.Product.ProductPrice;
+        product.ProductCampaignPrice = model.Product.ProductCampaignPrice;
+        product.StockCount = model.Product.StockCount;
+
+        // Clear existing relationships before re-adding
+        _db.ProductCategories.RemoveRange(product.ProductCategories);
+        _db.ProductTags.RemoveRange(product.ProductTags);
+        _db.PhysicalProductAttributes.RemoveRange(product.PhysicalProductAttributes);
+        _db.ProductPictures.RemoveRange(product.ProductPictures);
+    }
+    else
+    {
+        // Create new product
+        product = model.Product;
+        _db.Products.Add(product);
+        await _db.SaveChangesAsync();
+    }
+
+    // Save uploaded pictures from session
+    var sessionImages = HttpContext.Session.GetObjectFromJson<List<string>>(model.TempID) ?? new List<string>();
+    foreach (var path in sessionImages)
+    {
+        _db.ProductPictures.Add(new ProductPicture
         {
-            model.AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList();
-            model.AllPhysicalAttributes = _db.PhysicalAttributes.OrderBy(p => p.Attribute).ToList();
-            ViewBag.AllTags = _db.Tags.Select(t => t.Tags).ToList();
-            return View(model);
-        }
+            ProductId = product.ProductId,
+            PicturePath = path
+        });
+    }
 
-        Product product;
-
-        //If ProductId exists, update instead of creating
-        if (model.Product.ProductId > 0)
+    // Save selected categories
+    if (model.SelectedCategoryIds != null && model.SelectedCategoryIds.Any())
+    {
+        foreach (var categoryId in model.SelectedCategoryIds)
         {
-            product = await _db.Products
-                .Include(p => p.ProductCategories)
-                .Include(p => p.ProductTags)
-                .Include(p => p.PhysicalProductAttributes)
-                .FirstOrDefaultAsync(p => p.ProductId == model.Product.ProductId);
-
-            if (product == null)
-                return NotFound();
-
-            // Update properties
-            product.ProductName = model.Product.ProductName;
-            product.ProductDescription = model.Product.ProductDescription;
-            product.ProductInstructions = model.Product.ProductInstructions;
-            product.ProductIngredients = model.Product.ProductIngredients;
-            product.ProductPrice = model.Product.ProductPrice;
-            product.ProductCampaignPrice = model.Product.ProductCampaignPrice;
-            product.StockCount = model.Product.StockCount;
-
-            // Clear existing categories/tags before re-adding
-            _db.ProductCategories.RemoveRange(product.ProductCategories);
-            _db.ProductTags.RemoveRange(product.ProductTags);
-            _db.PhysicalProductAttributes.RemoveRange(product.PhysicalProductAttributes);
-
-        }
-        else
-        {
-            // Create new product
-            product = model.Product;
-            _db.Products.Add(product);
-            await _db.SaveChangesAsync();
-        }
-
-        // Save uploaded pictures (overwrite or keep existing)
-        var tempPictures = HttpContext.Session.GetObjectFromJson<List<string>>(model.TempID) ?? new List<string>();
-
-        var existingPictures = _db.ProductPictures.Where(pp => pp.ProductId == product.ProductId);
-        _db.ProductPictures.RemoveRange(existingPictures);
-
-        foreach (var path in tempPictures)
-        {
-            _db.ProductPictures.Add(new ProductPicture
+            _db.ProductCategories.Add(new ProductCategory
             {
                 ProductId = product.ProductId,
-                PicturePath = path
+                CategoryId = categoryId
             });
         }
+    }
 
-        // Save selected categories
-        if (model.SelectedCategoryIds != null && model.SelectedCategoryIds.Any())
+    // Save selected physical attributes (sizes)
+    if (model.SelectedPhysicalAttributeIds != null && model.SelectedPhysicalAttributeIds.Any())
+    {
+        foreach (var attributeId in model.SelectedPhysicalAttributeIds)
         {
-            foreach (var categoryId in model.SelectedCategoryIds)
+            _db.PhysicalProductAttributes.Add(new PhysicalProductAttribute
             {
-                _db.ProductCategories.Add(new ProductCategory
-                {
-                    ProductId = product.ProductId,
-                    CategoryId = categoryId
-                });
-            }
+                ProductId = product.ProductId,
+                PhysicalAttributeId = attributeId
+            });
         }
-        
+    }
 
-        // Save selected physical attributes (sizes)
-
-        if (model.SelectedPhysicalAttributeIds != null && model.SelectedPhysicalAttributeIds.Any())
+    // Save tags
+    if (model.Tags != null && model.Tags.Any())
+    {
+        foreach (var tagName in model.Tags)
         {
-            foreach (var attributeId in model.SelectedPhysicalAttributeIds)
+            var tag = await _db.Tags.FirstOrDefaultAsync(t => t.Tags == tagName);
+            if (tag == null)
             {
-                _db.PhysicalProductAttributes.Add(new PhysicalProductAttribute
-                {
-                    ProductId = product.ProductId,
-                    PhysicalAttributeId = attributeId
-                });
+                tag = new Tag { Tags = tagName };
+                _db.Tags.Add(tag);
+                await _db.SaveChangesAsync();
             }
-        }
 
-
-        // Save tags
-        if (model.Tags != null && model.Tags.Any())
-        {
-            foreach (var tagName in model.Tags)
+            _db.ProductTags.Add(new ProductTags
             {
-                var tag = await _db.Tags.FirstOrDefaultAsync(t => t.Tags == tagName);
-                if (tag == null)
+                ProductId = product.ProductId,
+                TagId = tag.TagId
+            });
+        }
+    }
+
+    await _db.SaveChangesAsync();
+
+    // Clear temp images from session
+    HttpContext.Session.Remove(model.TempID);
+
+    return RedirectToAction("Index", new { id = product.ProductId });
+}
+
+[HttpGet]
+[Authorize(Roles = "Admin,Staff")]
+public async Task<IActionResult> EditProduct(int id)
+{
+    var product = await _db.Products
+        .Include(p => p.ProductCategories)
+        .Include(p => p.ProductPictures)
+        .Include(p => p.ProductTags)
+        .ThenInclude(pt => pt.Tag)
+        .Include(p => p.PhysicalProductAttributes)
+        .FirstOrDefaultAsync(p => p.ProductId == id);
+
+    if (product == null)
+        return NotFound();
+
+    var picturePaths = product.ProductPictures.Select(pp => pp.PicturePath).ToList();
+
+    var viewModel = new ProductFormViewModel
+    {
+        Product = product,
+        AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList(),
+        AllPhysicalAttributes = _db.PhysicalAttributes.OrderBy(p => p.Attribute).ToList(),
+        AllTags = _db.Tags.Select(t => t.Tags).ToList(),
+        SelectedCategoryIds = product.ProductCategories.Select(pc => pc.CategoryId).ToList(),
+        SelectedPhysicalAttributeIds = product.PhysicalProductAttributes.Select(ppa => ppa.PhysicalAttributeId).ToList(),
+        Tags = product.ProductTags.Select(pt => pt.Tag.Tags).ToList(), // Selected tags for this product
+        ExistingImagePaths = picturePaths,
+        TempID = Guid.NewGuid().ToString()
+    };
+
+    // Store images in session for management
+    HttpContext.Session.SetObjectAsJson(viewModel.TempID, picturePaths);
+    
+    ViewData["IsEditMode"] = true;
+    return View("ProductForm", viewModel);
+}
+
+[HttpPost]
+[Authorize(Roles = "Admin,Staff")]
+[ValidateAntiForgeryToken]
+public async Task<IActionResult> DeleteProduct(int id)
+{
+    var product = await _db.Products
+        .Include(p => p.ProductPictures)
+        .Include(p => p.ProductCategories)
+        .Include(p => p.ProductTags)
+        .Include(p => p.PhysicalProductAttributes)
+        .Include(p => p.FavoriteProducts)
+        .Include(p => p.CartProducts)
+        .FirstOrDefaultAsync(p => p.ProductId == id);
+
+    if (product == null)
+        return NotFound();
+
+    try
+    {
+        // Delete product images from disk
+        foreach (var picture in product.ProductPictures)
+        {
+            var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", picture.PicturePath.TrimStart('/'));
+            if (System.IO.File.Exists(fullPath))
+            {
+                try
                 {
-                    tag = new Tag { Tags = tagName };
-                    _db.Tags.Add(tag);
-                    await _db.SaveChangesAsync();
+                    System.IO.File.Delete(fullPath);
                 }
-
-                _db.ProductTags.Add(new ProductTags
+                catch (Exception ex)
                 {
-                    ProductId = product.ProductId,
-                    TagId = tag.TagId
-                });
+                    _logger.LogWarning(ex, "Failed to delete image file: {Path}", fullPath);
+                }
             }
         }
 
+        // Remove all related data
+        _db.ProductPictures.RemoveRange(product.ProductPictures);
+        _db.ProductCategories.RemoveRange(product.ProductCategories);
+        _db.ProductTags.RemoveRange(product.ProductTags);
+        _db.PhysicalProductAttributes.RemoveRange(product.PhysicalProductAttributes);
+        _db.FavoriteProducts.RemoveRange(product.FavoriteProducts);
+        _db.CartProducts.RemoveRange(product.CartProducts);
+        
+        // Remove the product itself
+        _db.Products.Remove(product);
+        
         await _db.SaveChangesAsync();
 
-        // clear temp images
-        HttpContext.Session.Remove(model.TempID);
-
-        return RedirectToAction("Index", new { id = product.ProductId });
+        return Json(new { success = true, message = "Produkt slettet" });
     }
-
-
-    [HttpGet]
-    [Authorize(Roles = "Admin,Staff")]
-    public async Task<IActionResult> EditProduct(int id)
+    catch (Exception ex)
     {
-        var product = await _db.Products
-            .Include(p => p.ProductCategories)
-            .Include(p => p.ProductPictures)
-            .Include(p => p.ProductTags)
-            .ThenInclude(pt => pt.Tag)
-            .Include(p => p.PhysicalProductAttributes)
-            .FirstOrDefaultAsync(p => p.ProductId == id);
-
-        if (product == null)
-            return NotFound();
-
-        var viewModel = new ProductFormViewModel
-        {
-            Product = product,
-            AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList(),
-            AllPhysicalAttributes = _db.PhysicalAttributes.OrderBy(p => p.Attribute).ToList(),
-            SelectedCategoryIds = product.ProductCategories.Select(pc => pc.CategoryId).ToList(),
-            SelectedPhysicalAttributeIds = product.PhysicalProductAttributes.Select(ppa => ppa.PhysicalAttributeId).ToList(),
-            Tags = product.ProductTags.Select(pt => pt.Tag.Tags).ToList(),
-            TempID = Guid.NewGuid().ToString()
-        };
-
-       
-        var picturePaths = product.ProductPictures.Select(pp => pp.PicturePath).ToList();
-        HttpContext.Session.SetObjectAsJson(viewModel.TempID, picturePaths);
-        ViewBag.ExistingImages = picturePaths;
-
-        ViewBag.AllTags = _db.Tags.Select(t => t.Tags).ToList();
-
-        
-        ViewData["IsEditMode"] = true;
-        return View("AddProduct", viewModel);
+        _logger.LogError(ex, "Failed to delete product {ProductId}", id);
+        return Json(new { success = false, error = "Kunne ikke slette produkt" });
     }
-
-    [HttpPost]
-    [Authorize(Roles = "Admin,Staff")]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteProduct(int id)
-    {
-        var product = await _db.Products
-            .Include(p => p.ProductPictures)
-            .Include(p => p.ProductCategories)
-            .Include(p => p.ProductTags)
-            .Include(p => p.PhysicalProductAttributes)
-            .Include(p => p.FavoriteProducts)
-            .Include(p => p.CartProducts)
-            .FirstOrDefaultAsync(p => p.ProductId == id);
-
-        if (product == null)
-            return NotFound();
-
-        try
-        {
-            // Delete product images from disk
-            foreach (var picture in product.ProductPictures)
-            {
-                var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", picture.PicturePath.TrimStart('/'));
-                if (System.IO.File.Exists(fullPath))
-                {
-                    try
-                    {
-                        System.IO.File.Delete(fullPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete image file: {Path}", fullPath);
-                    }
-                }
-            }
-
-            // Remove all related data
-            _db.ProductPictures.RemoveRange(product.ProductPictures);
-            _db.ProductCategories.RemoveRange(product.ProductCategories);
-            _db.ProductTags.RemoveRange(product.ProductTags);
-            _db.PhysicalProductAttributes.RemoveRange(product.PhysicalProductAttributes);
-            _db.FavoriteProducts.RemoveRange(product.FavoriteProducts);
-            _db.CartProducts.RemoveRange(product.CartProducts);
-            
-            // Remove the product itself
-            _db.Products.Remove(product);
-            
-            await _db.SaveChangesAsync();
-
-            return Json(new { success = true, message = "Produkt slettet" });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete product {ProductId}", id);
-            return Json(new { success = false, error = "Kunne ikke slette produkt" });
-        }
-    }
+}
 
 
 //todo: index for users trying to access page without being logged in

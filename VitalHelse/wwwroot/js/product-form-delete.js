@@ -1,3 +1,5 @@
+/* Product form delete functionality */
+
 (function() {
     'use strict';
 

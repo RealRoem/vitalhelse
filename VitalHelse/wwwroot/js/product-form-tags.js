@@ -1,3 +1,5 @@
+/* Product form tag input functionality */
+
 (function() {
     'use strict';
 
