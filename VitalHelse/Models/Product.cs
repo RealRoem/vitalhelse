@@ -19,6 +19,8 @@ public class Product
     [StringLength(1000)] public string? ProductDescription { get; set; }
     [StringLength(1000)] public string? ProductIngredients { get; set; }
     
+    [StringLength(1000)] public string? ProductInstructions { get; set; }
+    
     [Required]
     public double ProductPrice { get; set; }
     public double? ProductCampaignPrice { get; set; }

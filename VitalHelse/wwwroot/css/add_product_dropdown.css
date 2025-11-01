@@ -46,14 +46,6 @@
     background-color: #f5f5f5;
 }
 
-.category-name {
-    flex: 1;
-    text-align: left;
-    font-size: 0.95rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
 
 .dropdown-option-item input[type="checkbox"] {
     position: absolute;

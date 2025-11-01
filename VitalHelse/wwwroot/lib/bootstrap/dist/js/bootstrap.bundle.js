@@ -3525,7 +3525,7 @@
 
   /**
    * --------------------------------------------------------------------------
-   * Bootstrap dropdown.js
+   * Bootstrap productDropdown.js
    * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
    * --------------------------------------------------------------------------
    */

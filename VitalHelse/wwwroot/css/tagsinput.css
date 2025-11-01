@@ -16,7 +16,7 @@
     border-radius: 20px;
     padding: 6px 12px;
     margin: 4px;
-    display: block;
+    display: inline-flex;
     align-items: center;
     font-size: 14px;
 }
@@ -63,6 +63,3 @@
     color: white;
 }
 
-.tag-input-container {
-    position: relative;
-}

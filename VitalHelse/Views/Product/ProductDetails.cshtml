@@ -64,7 +64,7 @@
                 </h2>
                 <div id="collapseOne" class="accordion-collapse collapse">
                     <div class="accordion-body">
-                        <p> Beskrivelse av hvordan produktet brukes</p>
+                        <p> @Model.ProductInstructions</p>
                     </div>
                 </div>
             </div>
@@ -80,6 +80,11 @@
                     </div>
                 </div>
             </div>
+            @if (User.IsInRole("Admin") || User.IsInRole("Staff"))
+            {
+                <a class="editproduct" asp-controller="Product" asp-action="EditProduct" asp-route-id="@Model.ProductId">Rediger produkt</a>
+            }
+
         </div>
     </div>
 </div>

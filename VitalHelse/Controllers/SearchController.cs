@@ -98,9 +98,10 @@ public class SearchController : Controller
         // Search text
         if (!string.IsNullOrWhiteSpace(query))
         {
+            var lowerQuery = query.ToLower();
             productsQuery = productsQuery.Where(p =>
-                (p.ProductName != null && p.ProductName.ToLower().Contains(query)) ||
-                (p.ProductDescription != null && p.ProductDescription.ToLower().Contains(query)));
+                (p.ProductName != null && p.ProductName.ToLower().Contains(lowerQuery)) ||
+                (p.ProductDescription != null && p.ProductDescription.ToLower().Contains(lowerQuery)));
         }
 
         // Filter by Category

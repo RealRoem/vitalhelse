@@ -172,7 +172,7 @@ public static class TestData
                 StockCount = 25,
                 ProductDescription = "Nattkrem med Aloe Vera og hyaluronsyre – roer huden og gir dyp fuktighet.",
                 LabelDescription = "Aloe Vera – Hudpleie",
-                ProductPictures = { new() { PicturePath = "/images/products/AloeV Hyaluronic Acid Night Cream 50 ml.png" } },
+                ProductPictures = { new() { PicturePath = "/images/products/AloeV Hyaluronic Acid Night Cream 50 ml.avif" } },
                 ProductCategories = { new() { Category = aloeHud } },
                 PhysicalProductAttributes ={new() { PhysicalAttribute = db.PhysicalAttributes.First(a => a.Attribute == "50ml") }}
             },
@@ -284,7 +284,7 @@ public static class TestData
                 StockCount = 20,
                 ProductDescription = "Effektiv hånddesinfeksjon for profesjonell bruk – 70% alkohol.",
                 LabelDescription = "Desinfeksjon – Hender",
-                ProductPictures = { new() { PicturePath = "/images/products/Crystal Clean Desinfiserende Håndgel 5 liter.png" } },
+                ProductPictures = { new() { PicturePath = "/images/products/Crystal Clean Desinfiserende Håndgel 5 liter.avif" } },
                 ProductCategories = { new() { Category = hygHånd } }
             },
             new()
@@ -294,7 +294,7 @@ public static class TestData
                 StockCount = 40,
                 ProductDescription = "Håndsprit med 85% alkohol – effektiv og mild mot huden.",
                 LabelDescription = "Desinfeksjon – Hender",
-                ProductPictures = { new() { PicturePath = "/images/products/Eco-Bac 85% Håndsprit 1 liter.png" } },
+                ProductPictures = { new() { PicturePath = "/images/products/Eco-Bac 85% Håndsprit 1 liter.avif" } },
                 ProductCategories = { new() { Category = hygHånd } }
             }
         };

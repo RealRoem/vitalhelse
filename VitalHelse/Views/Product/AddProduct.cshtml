@@ -1,36 +1,47 @@
-
-@model VitalHelse.Models.AddProductViewModel
-
-
-@{
-    var tempID = Guid.NewGuid().ToString();
-}
+@model VitalHelse.Models.ProductFormViewModel
+@using VitalHelse.Helpers
 
 @{
-    ViewData["Title"] = "Add Product";
+bool isEditMode = ViewData["IsEditMode"] != null && (bool)ViewData["IsEditMode"];
+ViewData["Title"] = isEditMode ? "Edit Product" : "Add Product";
 }
 
 <h2>@ViewData["Title"]</h2>
 
 <form asp-action="AddProduct" method="post">
+    @Html.AntiForgeryToken()
+
+    @if (isEditMode)
+    {
+        <input type="hidden" asp-for="Product.ProductId" />
+    }
+
     <div class="form-group mb-3">
-        <input type="hidden" asp-for="TempID" id="TempID" />
+        <input type="hidden" asp-for="TempID" id="TempID"/>
         <label>Produkt Bilder</label>
         <button type="button" class="btn btn-secondary" id="uploadButton">Legg til bilder</button>
+        <small class="form-text text-muted d-block">Støttede formater: JPG, PNG, WebP, AVIF, GIF</small>
         <div id="previewImages" class="mt-2"></div>
     </div>
+
     <div class="form-group mb-3">
         <label asp-for="Product.ProductName" class="form-label">Produkt navn</label>
-        <input asp-for="Product.ProductName" class="form-control"/>
+        <input asp-for="Product.ProductName" class="form-control" placeholder="Skriv produkt navn her..."/>
         <span asp-validation-for="Product.ProductName" class="text-danger"></span>
     </div>
 
     <div class="form-group mb-3">
         <label asp-for="Product.ProductDescription" class="form-label">Produkt Beskrivelse</label>
-        <textarea asp-for="Product.ProductDescription" class="form-control"></textarea>
+        <textarea asp-for="Product.ProductDescription" class="form-control" placeholder="Skriv produkt beskrivelse..."></textarea>
         <span asp-validation-for="Product.ProductDescription" class="text-danger"></span>
     </div>
-    
+
+    <div class="form-group mb-3">
+        <label asp-for="Product.ProductInstructions" class="form-label">Bruk</label>
+        <textarea asp-for="Product.ProductInstructions" class="form-control" rows="3" placeholder="Skriv bruksområdet her..."></textarea>
+        <span asp-validation-for="Product.ProductInstructions" class="text-danger"></span>
+    </div>
+
     <div class="form-group mb-3">
         <label asp-for="Product.ProductIngredients" class="form-label">Ingredienser</label>
         <textarea asp-for="Product.ProductIngredients" class="form-control" rows="3" placeholder="Skriv ingrediensene her..."></textarea>
@@ -42,7 +53,7 @@
         <input asp-for="Product.ProductPrice" class="form-control"/>
         <span asp-validation-for="Product.ProductPrice" class="text-danger"></span>
     </div>
-    
+
     <div class="form-group mb-3">
         <label for="categories">Kategorier</label>
         <div class="dropdown-checkbox" id="categoryDropdown">
@@ -52,7 +63,23 @@
                 {
                     <label class="dropdown-option-item">
                         <span class="category-name">@category.CategoryName</span>
-                        <input type="checkbox" name="SelectedCategoryIds" value="@category.CategoryId" />
+                        <input type="checkbox" name="SelectedCategoryIds" value="@category.CategoryId" @(Model.SelectedCategoryIds != null && Model.SelectedCategoryIds.Contains(category.CategoryId) ? "checked" : "") />
+                    </label>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-group mb-3">
+        <label for="sizes">Størrelser / Størrelse</label>
+        <div class="dropdown-checkbox" id="sizeDropdown">
+            <div class="dropdown-selected">Velg Størrelser</div>
+            <div class="dropdown-options">
+                @foreach (var size in Model.AllPhysicalAttributes)
+                {
+                    <label class="dropdown-option-item">
+                        <span class="size-name">@size.Attribute</span>
+                        <input type="checkbox" name="SelectedPhysicalAttributeIds" value="@size.PhysicalAttributeId" @(Model.SelectedPhysicalAttributeIds != null && Model.SelectedPhysicalAttributeIds.Contains(size.PhysicalAttributeId) ? "checked" : "") />
                     </label>
                 }
             </div>
@@ -73,184 +100,70 @@
     </div>
 
     <div class="form-group">
-        <label for="tag-input">Tags</label>
+        <label for="tag-input">Etiketter</label>
         <div class="tag-input-container" id="tag-input-container">
-            <input type="text" id="tag-input" class="tag-input" placeholder="Type tag and press Enter" />
+            <input type="text" id="tag-input" class="tag-input" placeholder="Skriv og press enter..."/>
         </div>
     </div>
-    
+
     <div id="hidden-tags-container">
         @foreach (var tag in Model.Tags)
         {
-            <input type="hidden" name="Tags" value="@tag" />
+            <input type="hidden" name="Tags" value="@tag"/>
         }
     </div>
 
-
     <button type="submit" class="btn btn-primary">Lagre Produkt</button>
+    @if (isEditMode)
+    {
+        <button type="button" class="btn btn-danger ms-2" id="deleteProductBtn">Slett Produkt</button>
+    }
+
 </form>
 
-<!-- to be moved to partial-->
-@section Scripts {
-    <partial name="_ValidationScriptsPartial"/>
-    <script>
-        const TempID = document.getElementById('TempID').value;
-
-        document.getElementById('uploadButton').addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.multiple = true;
-            input.click();
-
-            input.onchange = () => {
-                for (let file of input.files) {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    formData.append('TempID', TempID);
-
-                    fetch('/Product/UploadPicture', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            const img = document.createElement('img');
-                            img.src = data.path;
-                            img.style.maxWidth = '150px';
-                            img.style.margin = '5px';
-                            document.getElementById('previewImages').appendChild(img);
-                        }
-                    });
-                }
-            };
-        });
-    </script>
-
-    <script>
-    document.querySelectorAll('.dropdown-checkbox').forEach(dropdown => {
-        const selected = dropdown.querySelector('.dropdown-selected');
-        const options = dropdown.querySelector('.dropdown-options');
-
-        selected.addEventListener('click', () => {
-            options.style.display = options.style.display === 'block' ? 'none' : 'block';
-        });
-
-        //close dropdown if clicked outside
-        document.addEventListener('click', (e) => {
-            if (!dropdown.contains(e.target)) {
-                options.style.display = 'none';
-            }
-        });
-    });
-    </script>
-    
- <script>
-     const tagInput = document.getElementById('tag-input'); 
-     const tagContainer = document.getElementById('tag-input-container');
-     const hiddenTagsContainer = document.getElementById('hidden-tags-container'); 
-     const form = tagInput.closest('form');
-     let tags = [];
-
-     // C# tags list
-     const allTags = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AllTags ?? new List<string>()));
-
-     let suggestionBox;
-
-     // Handle Enter in tag input
-     tagInput.addEventListener('keydown', function (e) {
-         if (e.key === 'Enter') {
-             e.preventDefault(); // stop form submission
-             e.stopPropagation();
-
-             const value = tagInput.value.trim();
-             if (value !== '') {
-                 addTag(value);
-                 tagInput.value = '';
-                 hideSuggestions();
-             }
-         }
-});
-
-     // Input for autocomplete
-     tagInput.addEventListener('input', function () {
-         const inputValue = tagInput.value.toLowerCase();
-         const filtered = allTags.filter(tag => tag.toLowerCase().includes(inputValue) && !tags.includes(tag));
-         if (filtered.length > 0 && inputValue.length > 0) {
-             showSuggestions(filtered);
-         } else {
-             hideSuggestions();
-         }
-});
-
-     function addTag(tagText) {
-         if (!tags.includes(tagText)) {
-             tags.push(tagText);
-             renderTags();
-         }
+@if (isEditMode)
+{
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteConfirmModalLabel">Bekreft sletting</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Er du sikker på at du vil slette dette produktet? Denne handlingen kan ikke angres.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Avbryt</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Slett</button>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
-     function showSuggestions(filtered) {
-         hideSuggestions();
-         suggestionBox = document.createElement('div');
-         suggestionBox.classList.add('suggestion-box');
-         filtered.forEach(tag => {
-             const option = document.createElement('div');
-             option.textContent = tag;
-             option.classList.add('suggestion-item');
-             option.addEventListener('click', () => {
-                 addTag(tag);
-                 tagInput.value = '';
-                 hideSuggestions();
-             });
-             suggestionBox.appendChild(option);
-         });
-         tagContainer.appendChild(suggestionBox);
-     }
-
-     function hideSuggestions() {
-         if (suggestionBox) suggestionBox.remove();
-         suggestionBox = null;
-     }
-
-     function renderTags() {
-         const existingTags = tagContainer.querySelectorAll('.tag');
-         existingTags.forEach(t => t.remove());
-         hiddenTagsContainer.innerHTML = '';
-
-         tags.forEach(tag => {
-             // visible tag bubble
-             const tagEl = document.createElement('div');
-             tagEl.classList.add('tag');
-             tagEl.innerHTML = `${tag} <span class="remove-tag">&times;</span>`;
-             tagEl.querySelector('.remove-tag').addEventListener('click', () => {
-                 tags = tags.filter(t => t !== tag);
-                 renderTags();
-             });
-             tagContainer.insertBefore(tagEl, tagInput);
-
-             // hidden input for form
-             const hiddenInput = document.createElement('input');
-             hiddenInput.type = 'hidden';
-             hiddenInput.name = 'Tags';
-             hiddenInput.value = tag;
-             hiddenTagsContainer.appendChild(hiddenInput);
-         });
-     }
-
-     // Hide suggestions on click outside
-     document.addEventListener('click', (e) => {
-         if (!tagContainer.contains(e.target)) hideSuggestions();
-     });
-
-</script>
 
 
-
-
-
-
+@section Scripts 
+{
+    <partial name="_ValidationScriptsPartial"/>
     
+    
+    <script>
 
+        window.existingProductImages = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.ExistingImages ?? new List<string>()));
+        window.productTags = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Tags ?? new List<string>()));
+        window.allProductTags = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.AllTags ?? new List<string>()));
+
+    </script>
+    
+    <script src="~/js/productDropdown.js" asp-append-version="true"></script>
+    <script src="~/js/productTagIpnut.js" asp-append-version="true"></script>
+    <script src="~/js/productImageUpload.js" asp-append-version="true"></script>
+    
+    @if (isEditMode)
+    {
+        <script src="~/js/productDelete.js" asp-append-version="true"></script>
+    }
+  
 }
