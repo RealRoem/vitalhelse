@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
     <link rel="stylesheet" href="~/css/searchSuggestions.css" asp-append-version="true"/>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
-    <link rel="stylesheet" href="~/css/filterBar.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/css/sideBarFilter.css" asp-append-version="true"/>
     <link rel="stylesheet" href="~/css/navbar.css" asp-append-version="true"/>
     <link rel="stylesheet" href="~/css/product.css" asp-append-version="true"/>
     <link rel="stylesheet" href="~/css/account.css" asp-append-version="true"/>
@@ -42,28 +42,7 @@
         <div class="container-fluid">
             <div class="navbar-top align-items-center">
                 <!-- Venstre: søk -->
-                <form class="search-form" asp-controller="Search" asp-action="Search" method="get">
-                    <div class="search-container position-relative">
-                        <input
-                            id="searchInput"                     
-                        name="query"                          
-                        type="search"
-                        class="search-input form-control"
-                        placeholder="Søk etter..."
-                        autocomplete="off"
-                        aria-label="Søk"
-                        />
-                        <button type="submit" class="search-btn" aria-label="Søk">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                        </button>
-                        <!-- beholder nøyaktig ID som JS bruker -->
-                        <div id="searchSuggestions" class="search-suggestions"></div>
-                    </div>
-                </form>
+                @await Html.PartialAsync("_SearchBar")
 
                 <!-- Midten: logo -->
                 <a class="navbar-brand vital-logo" asp-controller="Home" asp-action="Index">VitalHelse</a>
@@ -147,7 +126,7 @@
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/searchSuggestions.js" asp-append-version="true"></script>
-<script src="~/js/filterBar.js" asp-append-version="true"></script>
+<script src="~/js/sidebarFilter.js" asp-append-version="true"></script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

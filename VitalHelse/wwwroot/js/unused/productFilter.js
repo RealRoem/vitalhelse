@@ -1,6 +1,6 @@
 // Product Filter JavaScript
 // Handles auto-submit on checkbox change and enhanced user experience
-
+// Scrapped idea
 $(document).ready(function () {
     const filterForm = $('#filterForm');
     const categoryCheckboxes = $('input[name="categories"]');
