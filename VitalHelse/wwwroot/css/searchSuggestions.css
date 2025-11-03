@@ -21,6 +21,7 @@ Styling needs to change, just placeholder for testing functionality
 thank you AI for the help*/
 .search-suggestions.show {
     display: block;
+    z-index: 10000;
 }
 
 .search-suggestion-item {

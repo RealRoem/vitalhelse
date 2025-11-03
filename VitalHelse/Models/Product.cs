@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace VitalHelse.Models;
 
 
-public class Product
+public class   Product
 {
     public Product(){}
     
