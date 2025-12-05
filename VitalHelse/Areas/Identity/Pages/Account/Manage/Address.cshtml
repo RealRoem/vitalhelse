@@ -18,13 +18,13 @@
 
             <div class="form-group">
                 <label asp-for="Input.PostalCode">Postnummer</label>
-                <input id="postnummer" asp-for="Input.PostalCode" placeholder="Postnummer" />
+                <input id="postalcode" asp-for="Input.PostalCode" placeholder="Postnummer" />
                 <span asp-validation-for="Input.PostalCode" class="text-danger"></span>
             </div>
             
             <div class="form-group">
                 <label asp-for="Input.PostalPlace">Poststed</label>
-                <input asp-for="Input.PostalPlace" id="poststed" placeholder="Poststed" readonly class="form-control" />
+                <input asp-for="Input.PostalPlace" id="city" placeholder="Poststed" readonly class="form-control" />
             </div>
           
             <button id="registerSubmit" type="submit" class="btn-submit">Lagre endringer</button>

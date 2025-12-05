@@ -293,5 +293,18 @@ public class CheckoutController : Controller
             .ToListAsync();
         return View(orders);
     }
+    
+    [HttpGet]
+    public async Task<IActionResult> CartCount()
+    {
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        var count = await _db.CartProducts
+            .Where(cp => cp.AspNetUsersId == userId)
+            .SumAsync(cp => cp.Quantity);
+
+        return Json(count);
+    }
 
 }
+

@@ -94,7 +94,7 @@
                     </a>
                     
                     @if(User.Identity.IsAuthenticated){
-                      <a href="/Identity/Account/Manage/RedirectAfterLogin" class="icon-link" title="Min side">
+                      <a href="/identity/account/manage/RedirectAfterLogin" class="icon-link" title="Min side">
                           <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none"
                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                               <circle cx="12" cy="7" r="4"></circle>
@@ -113,13 +113,17 @@
                         </a>  
                     }
                     
-                    <a asp-controller="Checkout" asp-action="Index" class="icon-link" title="Handlevogn">
+                    <a asp-controller="Checkout" asp-action="Index" class="icon-link" title="Handlevogn" style="position: relative">
                         <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="9" cy="21" r="1"></circle>
                             <circle cx="20" cy="21" r="1"></circle>
                             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
                         </svg>
+                        
+                        <span id="cart-count">
+                            0
+                        </span>
                     </a>
                 </div>
             </div>
@@ -176,6 +180,7 @@
 <script src="~/js/components/searchSuggestions.js" asp-append-version="true"></script>
 <script src="~/js/components/navbarAnimation.js" asp-append-version="true"></script>
 <script src="~/js/temp/sidebarFilter.js" asp-append-version="true"></script>
+<script src="~/js/components/cartCount.js" asp-append-version="true"></script>
 
 @await RenderSectionAsync("Scripts", required: false)
 </body>

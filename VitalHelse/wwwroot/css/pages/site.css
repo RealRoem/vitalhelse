@@ -98,6 +98,19 @@ p {
     color: #fff;
 }
 
+ #cart-count{
+     position:absolute; 
+     top:-6px; 
+     right:-6px;
+     background: #e0bcae; 
+     color:black; 
+     font-size:11px;
+     font-weight: bolder;
+     padding:2px 6px; 
+     border-radius:50%;
+     display:none;
+ }
+
 /* =============================
    MAIN CONTAINER
    ============================= */

@@ -132,8 +132,8 @@ public class EmailModel : PageModel
                 protocol: Request.Scheme)!;
 
             // Disse to linjene skal kunne fjernes når e-post faktisk blir sendt
-            DisplayConfirmEmailChangeLink = true;
-            EmailChangeConfirmationUrl = callbackUrl;
+            //DisplayConfirmEmailChangeLink = true;
+            //EmailChangeConfirmationUrl = callbackUrl;
             
             await _emailSender.SendEmailAsync(
                 Input.NewEmail,

@@ -50,7 +50,8 @@ async function AddToCart(productId){
         setTimeout(() => document.getElementById("error-box").innerText = "", 3000);
     } else {
         if (!isAuthenticated) {
-            window.location.href = "/identity/account/login";
+            const currentUrl = window.location.pathname + window.location.search;
+            window.location.href =`/identity/account/login?returnUrl=${encodeURIComponent(currentUrl)}`;
             return;
         }
         /*
