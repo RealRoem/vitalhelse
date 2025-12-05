@@ -1,100 +1,107 @@
+<div class="filter-toggle-wrapper d-lg-none mb-2 w-100">
+    <button class="navbar-toggler btn-submit  w-100 d-block" type="button" data-bs-toggle="collapse" data-bs-target="#search-filter" aria-controls="search-filter"
+            aria-expanded="false" aria-label="Toggle search-bar">
+        <span> FILTRER </span>
+    </button>
+</div>
+<div class="collapse d-lg-block" id="search-filter">
+<form method="get" class="filter-form">
+    <input type="hidden" name="query" value="@ViewData["SearchQuery"]"/>
 
-        <form method="get" class="filter-form">
-            <input type="hidden" name="query" value="@ViewData["SearchQuery"]"/>
+ 
+ 
+    <!-- Categories Dropdown -->
+    <div class="filter-group ">
+        <label>Kategorier</label>
+        <div class="category-dropdowns nav-item">
+            @foreach (var parent in ((IEnumerable<Category>)ViewData["Categories"]).Where(c => c.ParentCategoryId == null))
+            {
+                <div class="category-parent">
+                    <div class="parent-header">
+                        <input type="checkbox"
+                               class="parent-category"
+                               name="categoryIds"
+                               value="@parent.CategoryId"
+                               @( ((List<int>)ViewData["SelectedCategoryIds"]).Contains(parent.CategoryId) ? "checked" : "" ) />
+                        <span class="parent-name">@parent.CategoryName</span>
+                        <!-- &#9660 is a down arrow Icon, prob dont need it with css added  -->
+                        <span class="toggle-icon">&#9660;</span>
+                    </div>
 
-            <h4>Filtrer</h4>
-
-            <!-- Categories Dropdown -->
-            <div class="filter-group">
-                <label>Kategorier</label>
-                <div class="category-dropdowns">
-                    @foreach (var parent in ((IEnumerable<Category>)ViewData["Categories"]).Where(c => c.ParentCategoryId == null))
-                    {
-                        <div class="category-parent">
-                            <div class="parent-header">
+                    <div class="category-children">
+                        @foreach (var child in ((IEnumerable<Category>)ViewData["Categories"]).Where(c => c.ParentCategoryId == parent.CategoryId))
+                        {
+                            <label class="child-label">
                                 <input type="checkbox"
-                                       class="parent-category"
+                                       class="child-category"
                                        name="categoryIds"
-                                       value="@parent.CategoryId"
-                                       @( ((List<int>)ViewData["SelectedCategoryIds"]).Contains(parent.CategoryId) ? "checked" : "" ) />
-                                <span class="parent-name">@parent.CategoryName</span>
-                                <!-- &#9660 is a down arrow Icon, prob dont need it with css added  -->
-                                <span class="toggle-icon">&#9660;</span>
-                            </div>
-
-                            <div class="category-children">
-                                @foreach (var child in ((IEnumerable<Category>)ViewData["Categories"]).Where(c => c.ParentCategoryId == parent.CategoryId))
-                                {
-                                    <label class="child-label">
-                                        <input type="checkbox"
-                                               class="child-category"
-                                               name="categoryIds"
-                                               value="@child.CategoryId"
-                                               @( ((List<int>)ViewData["SelectedCategoryIds"]).Contains(child.CategoryId) ? "checked" : "" ) />
-                                        @child.CategoryName
-                                    </label>
-                                }
-                            </div>
-                        </div>
-                    }
+                                       value="@child.CategoryId"
+                                       @( ((List<int>)ViewData["SelectedCategoryIds"]).Contains(child.CategoryId) ? "checked" : "" ) />
+                                @child.CategoryName
+                            </label>
+                        }
+                    </div>
                 </div>
-            </div>
+            }
+        </div>
+    </div>
 
-            <!-- Tags (if we want to use it)
-            <div class="filter-group">
-                <label for="tag">Tag</label>
-                <select id="tag" name="tagId" class="form-select">
-                    <option value="">Alle</option>
-                    @foreach (var t in (IEnumerable<Tag>)ViewData["Tags"])
-                    {
-                        <option value="@t.TagId">@t.Tags</option>
-                    }
-                </select>
-            </div> -->
+    <!-- Tags (if we want to use it)
+    <div class="filter-group">
+        <label for="tag">Tag</label>
+        <select id="tag" name="tagId" class="form-select">
+            <option value="">Alle</option>
+            @foreach (var t in (IEnumerable<Tag>)ViewData["Tags"])
+            {
+                <option value="@t.TagId">@t.Tags</option>
+            }
+        </select>
+    </div> -->
            
 
-            <!-- Size -->
-            <div class="filter-group">
-                <label for="size">Størrelse</label>
-                <select id="size" name="sizeId" class="form-select">
-                    <!option value="" selected="@(ViewData["SelectedSizeId"] == null ? "selected" : null)">Alle</!option>
-                    @foreach (var s in (IEnumerable<PhysicalAttribute>)ViewData["Sizes"])
-                    {
-                        <!option value="@s.PhysicalAttributeId" selected="@(ViewData["SelectedSizeId"] != null && (int)ViewData["SelectedSizeId"] == s.PhysicalAttributeId ? "selected" : null)">
-                            @s.Attribute
-                        </!option>
-                    }
-                </select>
-            </div>
+    <!-- Size -->
+    <div class="filter-group">
+        <label for="size">Størrelse</label>
+        <select id="size" name="sizeId" class="form-select">
+            <!option value="" selected="@(ViewData["SelectedSizeId"] == null ? "selected" : null)">Alle</!option>
+            @foreach (var s in (IEnumerable<PhysicalAttribute>)ViewData["Sizes"])
+            {
+                <!option value="@s.PhysicalAttributeId" selected="@(ViewData["SelectedSizeId"] != null && (int)ViewData["SelectedSizeId"] == s.PhysicalAttributeId ? "selected" : null)">
+                    @s.Attribute
+                </!option>
+            }
+        </select>
+    </div>
 
 
 
 
 
-            <!-- Price -->
-            <div class="filter-group price-range">
-                <label>Pris</label>
-                <div class="price-inputs">
-                    <input type="number" name="minPrice" placeholder="Min" class="form-control"
-                           value="@(ViewData["SelectedMinPrice"] ?? "")" />
-                    <input type="number" name="maxPrice" placeholder="Maks" class="form-control"
-                           value="@(ViewData["SelectedMaxPrice"] ?? "")"/>
-                </div>
-            </div>
+    <!-- Price -->
+    <div class="filter-group price-range">
+        <label>Pris</label>
+        <div class="price-inputs">
+            <input type="number" name="minPrice" placeholder="Min" class="form-control"
+                   value="@(ViewData["SelectedMinPrice"] ?? "")" />
+            <input type="number" name="maxPrice" placeholder="Maks" class="form-control"
+                   value="@(ViewData["SelectedMaxPrice"] ?? "")"/>
+        </div>
+    </div>
 
-            <!-- Toggles -->
-            <div class="filter-group toggles">
+    <!-- Toggles -->
+    <div class="filter-group toggles">
                 
-                <label>
-                    <input type="checkbox" name="discountOnly" value="true"
-                           @((bool)ViewData["SelectedDiscountOnly"] ? "checked" : "")/> På tilbud
-                </label>
-                <label>
-                    <input type="checkbox" name="inStockOnly" value="true"
-                           @((bool)ViewData["SelectedInStockOnly"] ? "checked" : "")/> På lager
-                </label>
+        <label>
+            <input type="checkbox" name="discountOnly" value="true"
+                   @((bool)ViewData["SelectedDiscountOnly"] ? "checked" : "")/> På tilbud
+        </label>
+        <label>
+            <input type="checkbox" name="inStockOnly" value="true"
+                   @((bool)ViewData["SelectedInStockOnly"] ? "checked" : "")/> På lager
+        </label>
 
-            </div>
+    </div>
 
-            <button type="submit" class="btn btn-primary w-100 mt-2">Filtrer</button>
-        </form>
+    <button type="submit" class="btn w-100 mt-2">FILTRER</button>
+</form>
+</div>
