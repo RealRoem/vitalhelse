@@ -17,32 +17,39 @@
     <li class="nav-item"><a class="nav-link @ManageNavPages.PersonalDataNavClass(ViewContext)" id="personal-data" asp-page="./PersonalData"><Personopplysninger></Personopplysninger></a></li>
 </ul> *@
 
-<div class="container align-items-center">
-    <nav class="navbar profile-navbar navbar-expand-sm navbar-toggleable-sm">
-        <ul class="navbar-nav flex-row">
-            <li class="nav-item subcategory-bar text-center mb-4">
-                @if (User.IsInRole("BusinessCustomer"))
-                {
-                    <a class="nav-item subcategory-link @ManageNavPages.BusinessNavClass(ViewContext)" id="business-profile" asp-page="./BusinessProfile">PROFIL</a>
-                }
-                else
-                {
-                    <a class="nav-item subcategory-link @ManageNavPages.IndexNavClass(ViewContext)" id="profile" asp-page="./Index">PROFIL</a>
-                }
 
-            </li>
-            <li class="nav-item subcategory-bar text-center mb-4">
-                <a class="nav-item subcategory-link @ManageNavPages.AddressNavClass(ViewContext)" id="change-address" asp-page="./Address">ENDRE ADRESSE</a>
-            </li> 
-            <li class="nav-item subcategory-bar text-center mb-4">
-                <a class="nav-item subcategory-link @ManageNavPages.ChangePasswordNavClass(ViewContext)" id="change-password" asp-page="./ChangePassword">ENDRE PASSORD</a>
-            </li> 
-            <li class="nav-item subcategory-bar text-center mb-4">
-                <a class="nav-item subcategory-link @ManageNavPages.EmailNavClass(ViewContext)" id="email" asp-page="./Email">ENDRE E-POST</a>
-            </li> 
-            <li class="nav-item subcategory-bar text-center mb-4">
-                <a class="nav-item subcategory-link" href="#">MINE BESTILLINGER</a>
-            </li>
-        </ul>
+
+    <nav class="navbar profile-navbar navbar-expand-sm navbar-toggleable-sm">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#profile-navbar" aria-controls="navbarSupportedContent"
+                aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="profile-navbar">
+            <ul class="navbar-nav flex-row">
+                <li class="nav-item subcategory-bar text-center mb-4">
+                    @if (User.IsInRole("BusinessCustomer"))
+                    {
+                        <a class="nav-item subcategory-link @ManageNavPages.BusinessNavClass(ViewContext)" id="business-profile" asp-page="./BusinessProfile">PROFIL</a>
+                    }
+                    else
+                    {
+                        <a class="nav-item subcategory-link @ManageNavPages.IndexNavClass(ViewContext)" id="profile" asp-page="./Index">PROFIL</a>
+                    }
+
+                </li>
+                <li class="nav-item subcategory-bar text-center mb-4">
+                    <a class="nav-item subcategory-link @ManageNavPages.AddressNavClass(ViewContext)" id="change-address" asp-page="./Address">ENDRE ADRESSE</a>
+                </li>
+                <li class="nav-item subcategory-bar text-center mb-4">
+                    <a class="nav-item subcategory-link @ManageNavPages.ChangePasswordNavClass(ViewContext)" id="change-password" asp-page="./ChangePassword">ENDRE PASSORD</a>
+                </li>
+                <li class="nav-item subcategory-bar text-center mb-4">
+                    <a class="nav-item subcategory-link @ManageNavPages.EmailNavClass(ViewContext)" id="email" asp-page="./Email">ENDRE E-POST</a>
+                </li>
+                <li class="nav-item subcategory-bar text-center mb-4">
+                    <a class="nav-item subcategory-link" href="#">MINE BESTILLINGER</a>
+                </li>
+            </ul>
+        </div>
     </nav>
-</div>
