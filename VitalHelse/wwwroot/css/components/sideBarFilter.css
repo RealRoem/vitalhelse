@@ -13,7 +13,7 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Same subtle shadow */
     border: 1px solid #ddd; /* Subtle border */
     position: sticky;
-    top: 200px;
+    top: 200px;    
     height: fit-content;
     max-height: calc(100vh - 220px);
     overflow-y: auto;

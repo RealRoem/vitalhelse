@@ -5,6 +5,7 @@
 .product-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    justify-items: center;
     gap: 28px;
     width: 100%;
     margin: 0 auto;
@@ -135,7 +136,7 @@
     cursor: pointer;
     color: #aaa;
     transition: .2s;
-    z-index: 9999; !important;
+    z-index: 20;
 }
 
 .heart-btn:hover {
