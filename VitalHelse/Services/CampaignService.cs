@@ -80,7 +80,7 @@ public class CampaignService
                 .Select(pc => pc.CategoryId)
                 .ToList();
 
-            int discountPercent = 0;
+            decimal discountPercent = 0;
 
             // Finn høyeste rabatt for produktets kategorier
             foreach (var catId in productCategories)
@@ -92,7 +92,7 @@ public class CampaignService
             // Sett kampanjepris
             if (discountPercent > 0 && p.ProductPriceInVAT > 0)
             {
-                double rate = (100 - discountPercent) / 100.0;
+                decimal rate = (100m - discountPercent) / 100m;
                 p.ProductCampaignPrice = p.ProductPriceInVAT * rate;
             }
             else

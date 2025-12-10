@@ -1,0 +1,203 @@
+@model List<VitalHelse.Models.BannerImage>
+@{
+    ViewData["Title"] = "Administrer Hjemmeside";
+    Layout = "_AdminLayout";
+
+    var settings = ViewBag.Settings as VitalHelse.Models.HomePageSettings;
+    var categories = ViewBag.Categories as List<VitalHelse.Models.Category>;
+}
+
+<div class="hp-management-container">
+    <h1 class="hp-admin-title">Administrer Hjemmeside</h1>
+    
+    <div class="hp-management-layout">
+        <div class="hp-controls-panel">
+            <div class="hp-section">
+                <h2 class="hp-section-title">Last opp nytt banner</h2>
+                <form id="uploadBannerForm" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    
+                    <div class="form-group hp-form-group">
+                        <label for="bannerFile">Velg bilde</label>
+                        <input type="file" id="bannerFile" name="bannerFile" accept="image/*" class="form-control hp-form-control" required>
+                        <small class="form-text text-muted">Maks 5MB. Støttede formater: JPG, PNG, GIF, WEBP</small>
+                    </div>
+
+                    <div class="form-group hp-form-group">
+                        <label for="altText">Alt-tekst (valgfritt)</label>
+                        <input type="text" id="altText" name="altText" class="form-control hp-form-control" maxlength="200">
+                    </div>
+
+                    <div class="form-group hp-form-group">
+                        <label for="linkType">Lenke-type</label>
+                        <select id="linkType" name="linkType" class="form-control hp-form-control">
+                            <option value="None">Ingen lenke</option>
+                            <option value="Category">Kategori</option>
+                            <option value="ExternalUrl">Ekstern URL</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group hp-form-group" id="linkTargetGroup" style="display: none;">
+                        <label for="linkTarget">Lenke-mål</label>
+                        <select id="linkTargetCategory" class="form-control hp-form-control" style="display: none;">
+                            <option value="">Velg kategori...</option>
+                            @foreach (var cat in categories ?? new List<VitalHelse.Models.Category>())
+                            {
+                                <option value="@cat.CategoryName">@cat.CategoryName</option>
+                            }
+                        </select>
+                        <input type="text" id="linkTargetUrl" class="form-control hp-form-control" placeholder="https://..." style="display: none;">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary hp-btn-upload">
+                        <i class="fas fa-upload"></i> Last opp banner
+                    </button>
+                </form>
+            </div>
+
+            <div class="hp-section">
+                <h2 class="hp-section-title">Eksisterende bannere</h2>
+                <div id="bannerList" class="hp-banner-list">
+                    @if (Model != null && Model.Any())
+                    {
+                        @foreach (var banner in Model)
+                        {
+                            <div class="hp-banner-item" data-banner-id="@banner.BannerImageId" draggable="true">
+                                <div class="hp-drag-handle">
+                                    <i class="fas fa-grip-vertical"></i>
+                                </div>
+                                <div class="hp-banner-thumbnail">
+                                    <img src="@banner.ImagePath" alt="@banner.AltText">
+                                </div>
+                                <div class="hp-banner-info">
+                                    <div class="hp-banner-meta">
+                                        <span class="hp-banner-order">Rekkefølge: @banner.DisplayOrder</span>
+                                        <span class="hp-banner-status @(banner.IsActive ? "active" : "inactive")">
+                                            @(banner.IsActive ? "Aktiv" : "Inaktiv")
+                                        </span>
+                                    </div>
+                                    <div class="hp-banner-link-info">
+                                        @if (banner.LinkType != "None" && !string.IsNullOrEmpty(banner.LinkTarget))
+                                        {
+                                            <small>
+                                                <i class="fas fa-link"></i>
+                                                @banner.LinkType: @banner.LinkTarget
+                                            </small>
+                                        }
+                                        else
+                                        {
+                                            <small class="text-muted">Ingen lenke</small>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="hp-banner-actions">
+                                    <button class="hp-btn-icon edit-banner" 
+                                            data-banner-id="@banner.BannerImageId"
+                                            data-link-type="@banner.LinkType"
+                                            data-link-target="@banner.LinkTarget"
+                                            title="Rediger lenke">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="hp-btn-icon toggle-active" data-banner-id="@banner.BannerImageId" title="Aktiver/deaktiver">
+                                        <i class="fas fa-@(banner.IsActive ? "eye-slash" : "eye")"></i>
+                                    </button>
+                                    <button class="hp-btn-icon hp-delete-banner" data-banner-id="@banner.BannerImageId" title="Slett">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted">Ingen bannere lagt til ennå.</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Settings Section -->
+            <div class="hp-section">
+                <h2 class="hp-section-title">Innstillinger</h2>
+                <form id="settingsForm">
+                    @Html.AntiForgeryToken()
+                    
+                    <div class="form-group hp-form-group">
+                        <label for="carouselInterval">Karrusel-intervall (sekunder)</label>
+                        <input type="number" id="carouselInterval" name="carouselInterval" 
+                               class="form-control hp-form-control" min="3" max="30" value="@settings?.CarouselInterval" required>
+                    </div>
+
+                    <div class="form-group hp-form-group">
+                        <label for="bestSellersCount">Antall bestselgere</label>
+                        <input type="number" id="bestSellersCount" name="bestSellersCount" 
+                               class="form-control hp-form-control" min="0" max="20" value="@settings?.BestSellersCount" required>
+                    </div>
+
+                    <div class="form-group hp-form-group">
+                        <label for="featuredProductsCount">Antall utvalgte produkter</label>
+                        <input type="number" id="featuredProductsCount" name="featuredProductsCount" 
+                               class="form-control hp-form-control" min="0" max="20" value="@settings?.FeaturedProductsCount" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary hp-save-button">
+                        <i class="fas fa-save "></i> Lagre innstillinger
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="hp-preview-panel">
+            <div class="hp-preview-header">
+                <h2 class="hp-section-title">Forhåndsvisning</h2>
+                <button id="refreshPreview" class="btn btn-outline-primary btn-sm hp-btn-refresh">
+                    <i class="fas fa-sync-alt"></i> Oppdater
+                </button>
+            </div>
+            <div class="hp-preview-container">
+                <iframe id="livePreview" src="/" title="Forhåndsvisning av hjemmeside"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade hp-modal" id="editBannerModal" tabindex="-1" role="dialog" aria-labelledby="editBannerModalLabel" aria-hidden="true">
+    <div class="modal-dialog hp-modal-dialog" role="document">
+        <div class="modal-content hp-modal-content">
+            <div class="modal-header hp-modal-header">
+                <h5 class="modal-title hp-modal-title" id="editBannerModalLabel">Rediger banner-lenke</h5>
+            </div>
+            <form id="editBannerForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="editBannerId" name="bannerId">
+                <div class="modal-body hp-modal-body">
+                    <div class="form-group hp-form-group">
+                        <label for="editLinkType">Lenke-type</label>
+                        <select id="editLinkType" name="linkType" class="form-control hp-form-control">
+                            <option value="None">Ingen lenke</option>
+                            <option value="Category">Kategori</option>
+                            <option value="ExternalUrl">Ekstern URL</option>
+                        </select>
+                    </div>
+                    <div class="form-group hp-form-group" id="editLinkTargetGroup" style="display: none;">
+                        <label for="editLinkTarget">Lenke-mål</label>
+                        <select id="editLinkTargetCategory" class="form-control hp-form-control" style="display: none;">
+                            <option value="">Velg kategori...</option>
+                            @foreach (var cat in categories ?? new List<VitalHelse.Models.Category>())
+                            {
+                                <option value="@cat.CategoryName">@cat.CategoryName</option>
+                            }
+                        </select>
+                        <input type="text" id="editLinkTargetUrl" class="form-control hp-form-control" placeholder="https://..." style="display: none;">
+                    </div>
+                </div>
+                <div class="modal-footer hp-modal-footer">
+                    <button type="submit" class="btn btn-primary hp-modal-btn-save">Lagre endringer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/components/homePageManagement.js" asp-append-version="true"></script>
+}

@@ -44,12 +44,12 @@ public class Product
     /// </summary>
     
     [Required]
-    public double ProductPriceInVAT { get; set; }
+    public decimal ProductPriceInVAT { get; set; }
 
     /// <summary>
     /// Price excluding VAT (Tripletex controlled).
     /// </summary>
-    public double? ProductPriceExVAT { get; set; }
+    public decimal? ProductPriceExVAT { get; set; }
 
     /// <summary>
     /// Determines if the product is visible in the webshop. 
@@ -60,7 +60,7 @@ public class Product
     /// <summary>
     /// Optional campaign price (manual override on the webshop).
     /// </summary>
-    public double? ProductCampaignPrice { get; set; }
+    public decimal? ProductCampaignPrice { get; set; }
 
     [StringLength(30)]
     public string? LabelDescription { get; set; }

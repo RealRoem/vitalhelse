@@ -80,8 +80,8 @@ public class SearchController : Controller
         List<int> categoryIds,
         int? tagId,
         int? sizeId,
-        double? minPrice,
-        double? maxPrice,
+        decimal? minPrice,
+        decimal? maxPrice,
         bool? discountOnly,
         bool? inStockOnly)
     

@@ -72,6 +72,8 @@ public class StripeWebHook : Controller
                 return Ok();
             }
             
+            var user = await _userManager.FindByIdAsync(userId);
+            
             var paymentIntentId = paymentIntent.Id;
 
             // Test to avoid duplicate order in case of network error
@@ -86,35 +88,90 @@ public class StripeWebHook : Controller
 
             Console.WriteLine($"Payment succeeded for user {userId}");
 
-            // Create order
-            var order = new Order
-            { 
-                AspNetUsersId = userId, 
-                OrderDate = DateTime.UtcNow,
-                StripePaymentIntentId = paymentIntentId,
-                // Husk: Legge til adresse
-            };
-            
-            // Fetch shopping cart from the database
+            // Get cart
             var cartItems = await _db.CartProducts
                 .Include(cp => cp.Product)
                 .Where(cp => cp.AspNetUsersId == userId)
                 .ToListAsync();
+
+            //if (!cartItems.Any()) return RedirectToAction("Index");
+
+            decimal beforeDiscount = cartItems.Sum(i => i.Product.ProductPriceInVAT * i.Quantity);
+            decimal productTotal = cartItems.Sum(i => (i.Product.ProductCampaignPrice ?? i.Product.ProductPriceInVAT) * i.Quantity);
+            decimal productDiscount = beforeDiscount - productTotal;
+
             
-            // Move items in shoppingcart into order table
+            
+            // Get user address
+            var address = await _db.UserAddresses.FirstOrDefaultAsync(a => a.Id == user.DefaultUserAddressId);
+            // Get user shipping method
+            var method = await _db.ShippingMethods.FirstOrDefaultAsync(s => s.Id == user.DefaultShippingMethodId);
+
+            // Get the thresholds
+            var thresholds = _db.ShippingPriceThresholds
+                .AsEnumerable()
+                .OrderBy(t => t.MinOrderAmount)
+                .ToList();
+
+            // Get correct shipping price based on cart total
+            decimal basePrice = thresholds
+                .Where(t => productTotal >= t.MinOrderAmount)
+                .Select(t => t.ShippingPrice)
+                .DefaultIfEmpty(0)
+                .Last();
+
+            // Calculate the shipping price based on thresholds and method
+            decimal shippingPrice = basePrice * method.RateMultiplier;
+            
+            int percent = HttpContext.Session.GetInt32("DiscountPercent") ?? 0;
+            decimal discountAmount = productTotal * (percent / 100m);
+            decimal total = productTotal - discountAmount + shippingPrice;
+
+            // Create order
+            var order = new Order
+            {
+                OrderDate = DateTime.UtcNow,
+                Status = "Paid",
+                TotalCost = total,
+                AspNetUsersId = userId,
+
+                DiscountCodeId = percent > 0 ? $"{percent}%" : null,
+                ShippingProvider = method.MethodName,
+                
+                ShippingFirstName = address.FirstName,
+                ShippingLastName = address.LastName,
+                ShippingStreet = address.Street,
+                ShippingPostalCode = address.PostalCode,
+                ShippingCity = address.City,
+                ShippingPhoneNumber = address.PhoneNumber,
+                
+                ShippingMethodName = method.MethodName,
+                ShippingMethodRateMultiplier = method.RateMultiplier,
+                ShippingPrice = shippingPrice
+            };
+
+            _db.Orders.Add(order);
+            await _db.SaveChangesAsync(); 
+            
+            // Add products
             foreach (var item in cartItems)
-            { 
-                order.OrderProducts.Add(new OrderProduct {
-                    ProductId = item.Product.ProductId,
+            {
+                _db.OrderProducts.Add(new OrderProduct
+                {
+                    OrderId = order.OrderId,
+                    ProductId = item.ProductId,
                     Quantity = item.Quantity
                 });
-                
-                item.Product.StockCount -= item.Quantity;
             }
-            // Adds order, and removes the shopping cart
-            _db.Orders.Add(order);
+
+            await _db.SaveChangesAsync();
+
+            // Clear cart
             _db.CartProducts.RemoveRange(cartItems);
             await _db.SaveChangesAsync();
+
+            // Remove discount code after use
+            HttpContext.Session.Remove("DiscountPercent");
 
             Console.WriteLine($"Created order {order.OrderId} for user {userId}");
             
@@ -128,9 +185,13 @@ public class StripeWebHook : Controller
             {
                 productListHtml += $"<li>{product.Product.ProductName} – {product.Quantity} stk – {product.Product.ProductPriceInVAT} kr</li>";
                 productListText += $"{product.Product.ProductName} - {product.Quantity} stk - {product.Product.ProductPriceInVAT} kr\n";
+                
+                // Reduce stock
+                product.Product.StockCount -= product.Quantity;
+                _db.Products.Update(product.Product);
             }
+            await _db.SaveChangesAsync();
 
-            var user = await _userManager.FindByIdAsync(userId);
 
             string firstName = user.FirstName;
             string lastName = user.LastName;
@@ -147,9 +208,8 @@ public class StripeWebHook : Controller
                 "Dato: "+ order.OrderDate +
                 "Produkter:\n" + productListText + "\n" +
                 $"Pris: {paymentIntent.Amount / 100m} {paymentIntent.Currency}"+ 
-                "Frakt: "+
-                "Totalt: "+
-                "Spor pakken din her: "+
+                $"Frakt: {shippingPrice}"+
+                $"Totalt: {(paymentIntent.Amount / 100m)+shippingPrice} {paymentIntent.Currency}"+
                 "Har du spørsmål? Kontakt oss på VitalHelse@butikk.no eller besøk VitalHelse.no",
                 htmlBody: 
                 "<h1>Takk for at du handlet hos Vital Helse!</h1>\n\n" +
@@ -158,10 +218,9 @@ public class StripeWebHook : Controller
                 "<h2>Bestilling</h2>\n" +
                 $"<ul>{productListHtml}</ul>\n" +
                 $"<p><strong>Pris:</strong> {paymentIntent.Amount / 100m} {paymentIntent.Currency.ToUpper()}</p>\n" +
-                "<p><strong>Frakt:</strong></p>\n" +
-                "<p><strong>Totalt:</strong></p>\n\n" +
+                $"<p><strong>Frakt:</strong></p> {shippingPrice}\n" +
+                $"<p><strong>Totalt:</strong></p> {(paymentIntent.Amount / 100m)+shippingPrice} {paymentIntent.Currency}\n\n" +
                 "<p><strong>Spor pakken din her:</strong> \n" +
-                "<a href=\"https://vitalhelse.no/sporing\">Klikk for å spore pakken</a>\n" +
                 "</p>\n\n<p>\n" +
                 "Har du spørsmål? Kontakt oss på \n" +
                 "<a href=\"mailto:VitalHelse@butikk.no\">VitalHelse@butikk.no</a> \n" +

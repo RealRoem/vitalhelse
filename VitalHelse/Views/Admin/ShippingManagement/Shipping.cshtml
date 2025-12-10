@@ -1,0 +1,97 @@
+@model VitalHelse.Models.ShippingViewModel
+
+@{
+    ViewBag.Title = "Frakt";
+    Layout = "_AdminLayout";
+}
+
+<div class="discountcodes-container">
+    <h3 class="section-title">Legg til fraktsats</h3>
+    
+    <form asp-action="AddThreshold" asp-controller="ShippingManagement" method="post" class="discountcode-form-inline">
+        <div class="form-group-inline">
+            <div class="form-row">
+                <label>Grense (kr)</label>
+                <input name="minOrderAmount" required />
+            </div>
+
+            <div class="form-row">
+                <label>Fraktpris (kr)</label>
+                <input name="shippingPrice" required />
+            </div>
+        </div>
+        <button type="submit" class="btn-create">Legg til fraktsats</button>
+    </form>
+
+    <table class="discountcode-table">
+        <tr>
+            <th>Min ordreverdi (kr)</th>
+            <th>Fraktpris (kr)</th>
+            <th></th>
+        </tr>
+
+        @foreach(var t in Model.Thresholds)
+        {
+            <tr>
+                <td>@t.MinOrderAmount</td>
+                <td>@t.ShippingPrice</td>
+                <td>
+                    <form asp-action="DeleteThreshold" asp-controller="ShippingManagement" method="post">
+                        <input type="hidden" name="id" value="@t.Id" />
+                        <button type="submit" class="btn-delete-icon">
+                            <img src="~/images/icons/trash.svg" alt="Slett"/>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </table>
+
+
+    <div class="divider"></div>
+
+    
+    <h3 class="section-title">Legg til fraktmetode</h3>
+    <form asp-action="AddMethod" asp-controller="ShippingManagement" method="post" class="discountcode-form-inline">
+        <div class="form-group-inline">
+
+            <div class="form-row">
+                <label>Metode</label>
+                <input name="name" required />
+            </div>
+
+            <div class="form-row">
+                <label>Rate (0 - 2)</label>
+                <input name="rate" required />
+            </div>
+            
+        </div>
+
+        <button type="submit" class="btn-create">Legg til fraktmetode</button>
+    </form>
+    
+<table class="discountcode-table">
+    <tr>
+        <th>Metode</th>
+        <th>Rate</th>
+        <th></th>
+    </tr>
+
+    @foreach(var m in Model.Methods)
+    {
+        <tr>
+            <td>@m.MethodName</td>
+            <td>@m.RateMultiplier</td>
+            <td>
+                <form asp-action="DeleteMethod" asp-controller="ShippingManagement" method="post">
+                    <input type="hidden" name="id" value="@m.Id" />
+                    <button type="submit" class="btn-delete-icon">
+                        <img src="~/images/icons/trash.svg" alt="Slett"/>
+                    </button>
+                </form>
+            </td>
+        </tr>
+    }
+</table>
+    
+</div>

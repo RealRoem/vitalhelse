@@ -1,20 +1,53 @@
-@using VitalHelse.Models.Enums
-@model VitalHelse.Models.UserAddress
+@model ShippingViewModel
+
 @{
-    ViewData["Title"] = "Leveringsadresse";
+    ViewBag.Title = "Leveringsmetode";
     Layout = "_CheckoutLayout";
 }
 
-<div class="list-group-item py-4 px-6">
-    <div class="card">
-        <div class="card-body">
-            Posten/PostNord
-        </div>
-    </div>
+<div id="shipping-data"
+     data-base-price="@Model.ShippingPrice">
 </div>
 
-<form action="/checkout.html" method="GET">
-    <input type="hidden" name="product" value="serum" />
-    <input type="number" name="quantity" value="2" min="1" />
-    <button type="submit">Kjøp nå</button>
+<form id="shipping-form" method="post">
+    <ul class="list-group">
+        @foreach (var method in Model.Methods)
+        {
+            var isChecked = Model.SelectedMethodId == method.Id;
+            var finalPrice = Model.ShippingPrice * method.RateMultiplier;
+
+            <li class="list-group-item">
+                <div class="row">
+                    <div class="col-1 align-content-center">
+                        <input type="radio"
+                               name="SelectedMethodId"
+                               class="shipping-radio btn-radio"
+                               value="@method.Id"
+                               data-rate="@method.RateMultiplier"
+                               @(isChecked ? "checked" : "")/>
+                    
+                    </div>
+                
+                    <div class="col-11">
+                        <div class="row align-items-center py-2">
+                            <div class="col-6">
+                                <div class="col-6 d-flex align-items-center">
+                                    <h6 class="m-0">@method.MethodName</h6>
+                                </div>
+                            </div>
+                        
+                            <div class="col-6 d-flex justify-content-end align-items-center">
+                                <h6 class="m-0">@finalPrice.ToString("N2") kr</h6>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </li>
+        }
+    </ul>
 </form>
+
+
+@section Scripts {
+    <script src="~/js/components/shipping.js" asp-append-version="true"></script>
+}

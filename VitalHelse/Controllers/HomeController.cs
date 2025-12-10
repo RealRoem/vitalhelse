@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using VitalHelse.Data;
 using VitalHelse.Models;
+using VitalHelse.ViewModels;
 
 namespace VitalHelse.Controllers
 {
@@ -10,25 +13,51 @@ namespace VitalHelse.Controllers
     /// </summary>
     public class HomeController : Controller
     {
+        private readonly ApplicationDbContext _db;        
         private readonly ILogger<HomeController> _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="HomeController"/> class.
         /// </summary>
         /// <param name="logger">Logger instance for recording diagnostic and error information.</param>
-        public HomeController(ILogger<HomeController> logger)
+        public HomeController(ILogger<HomeController> logger,ApplicationDbContext db)
         {
             _logger = logger;
+            _db = db;
         }
 
         /// <summary>
-        /// Displays the main landing page of the website.
+        /// Displays the main landing page of the website with carousel banners.
         /// </summary>
         /// <returns>The home page view.</returns>
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
             _logger.LogInformation("Home page accessed.");
-            return View();
+            
+            var banners = await _db.BannerImages
+                .Where(b => b.IsActive)
+                .OrderBy(b => b.DisplayOrder)
+                .ToListAsync();
+
+            var products = await _db.Products
+                .Include(p => p.ProductPictures)
+                .ToListAsync();
+
+          
+            var settings = await _db.HomePageSettings.FirstOrDefaultAsync();
+            if (settings == null)
+            {
+                settings = new HomePageSettings();
+            }
+
+            var viewModel = new HomePageViewModel
+            {
+                Banners = banners,
+                Products = products,
+                Settings = settings
+            };
+
+            return View(viewModel);
         }
 
         /// <summary>

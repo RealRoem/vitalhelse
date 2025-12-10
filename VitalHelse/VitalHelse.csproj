@@ -33,6 +33,7 @@
 
     <ItemGroup>
       <Folder Include="wwwroot\css\temp\" />
+      <Folder Include="wwwroot\images\banners\" />
       <Folder Include="wwwroot\images\products\" />
     </ItemGroup>
 

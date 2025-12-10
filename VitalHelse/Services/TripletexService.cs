@@ -81,8 +81,8 @@ public class TripletexService
             {
                 Id = id,
                 Name = item.GetProperty("name").GetString() ?? "",
-                PriceExVat = item.TryGetProperty("priceExcludingVatCurrency", out var p1) ? p1.GetDouble() : 0,
-                PriceInVat = item.TryGetProperty("priceIncludingVatCurrency", out var p2) ? p2.GetDouble() : 0,
+                PriceExVat = item.TryGetProperty("priceExcludingVatCurrency", out var p1) ? p1.GetDecimal() : 0,
+                PriceInVat = item.TryGetProperty("priceIncludingVatCurrency", out var p2) ? p2.GetDecimal() : 0,
                 StockCount = stock
             };
         });

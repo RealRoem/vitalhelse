@@ -24,7 +24,6 @@ public class ShoppingCartController : Controller
         _discountService = discountService;
     }
     
-
     [HttpDelete]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(int id)
@@ -42,8 +41,7 @@ public class ShoppingCartController : Controller
 
         // Save the changes
         await _db.SaveChangesAsync();
-
-        // Må fikse: returnere heller ok og sjekke i javascript
+        
         return NoContent();
     }
 
@@ -61,11 +59,12 @@ public class ShoppingCartController : Controller
 
         if (shoppingCart != null)
         {
+            /*
             if (shoppingCart.Quantity >= shoppingCart.Product.StockCount)
             {
                 // Returns a 400 bad request if the quantity equals the amount of stock
                 return BadRequest("Vi har desverre ikke dette antaller tilgjengelig på lager");
-            }
+            }*/
 
             // Adds quantity by 1 and save it
             shoppingCart.Quantity += 1;
@@ -82,12 +81,10 @@ public class ShoppingCartController : Controller
         var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
         // Finds the row in CartProducts where Product and userId match
-        var shoppingCart = await _db.CartProducts
-            .FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == userId);
+        var shoppingCart = await _db.CartProducts.FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == userId);
 
         // If quantity is 1 or less
-        if (shoppingCart.Quantity <= 1)
-        {
+        if (shoppingCart.Quantity <= 1) {
             return NoContent();  
         }
 
@@ -122,12 +119,14 @@ public class ShoppingCartController : Controller
         var stock = shoppingCart.Product.StockCount ?? 0;
         
         // If quantity is more than stock then set quantity to stock 
-        if (quantity > stock)
-            quantity = stock;
+        /*if (quantity > stock)
+            quantity = stock;*/
 
         // If quantity is more than stock then set quantity to stock 
+        /*
         if (quantity > shoppingCart.Product.StockCount.GetValueOrDefault())
             quantity = shoppingCart.Product.StockCount.GetValueOrDefault();
+        */
         
         // Update the quantity 
         shoppingCart.Quantity = quantity;

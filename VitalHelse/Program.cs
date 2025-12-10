@@ -80,6 +80,11 @@ builder.Services.Configure<AuthMessageSenderOptions>(options =>
 builder.Services
     .AddAuthentication();
 
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("Privileged", policy =>
+        policy.RequireRole("Admin", "Staff"));
+
+
 
 var app = builder.Build();
 

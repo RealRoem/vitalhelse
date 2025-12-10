@@ -34,48 +34,79 @@
             nextAction = null;
             break;
     }
-
-    // Disable if Cart is empty
-    bool disable = step == CheckoutStep.Cart && (Model is IEnumerable<object> col ? !col.Any() : true);
+    // Booleans that determine what steps user can click on
+    bool allowCart = true;
+    bool allowAddress = step >= CheckoutStep.Address;
+    bool allowShipping = step >= CheckoutStep.Shipping;
+    bool allowPayment = step >= CheckoutStep.ReviewOrder;
+    bool allowComplete = step >= CheckoutStep.Complete;
 }
-
-
-<div id="error-box" style="color:red; font-weight:bold; margin-top:10px;"></div>
-
 
 <!-- Checkout steps/Mini navbar -->
 <ul class="nav checkout-steps border-bottom pb-1">
+    
+    <!-- STEP 1: CART -->
     <li class="nav-item">
-        <!-- Check if the user is on the given step then change the class  -->
         <a class="nav-link @(step == CheckoutStep.Cart ? "active" : "")"
-           asp-controller="Checkout" asp-action="Index">Kasse</a>
+           href="@(allowCart ? Url.Action("Index", "Checkout", new { }) : "javascript:void(0)")"
+           style="@(allowCart ? "" : "pointer-events:none; opacity:0.4;")">Kasse</a>
+    </li>
+    
+    <!-- STEP 2: ADDRESS -->
+    <li class="nav-item">
+        <a class="nav-link @(step == CheckoutStep.Address ? "active" : "")"
+           href="@(allowAddress ? Url.Action("Address", "Checkout", new { }) : "javascript:void(0)")"
+           style="@(allowAddress ? "" : "pointer-events:none; opacity:0.4;")">Personalia</a>
+    </li>
+    
+    <!-- STEP 3: SHIPPINGMETHOD -->
+    <li class="nav-item">
+        <a class="nav-link @(step == CheckoutStep.Shipping ? "active" : "")"
+           href="@(allowShipping ? Url.Action("Shipping", "Checkout", new { }) : "javascript:void(0)")"
+           style="@(allowShipping ? "" : "pointer-events:none; opacity:0.4;")">Levering</a>
+    </li>
+    
+    <!-- STEP 1: REVIEWORDER -->
+    <li class="nav-item">
+        <a class="nav-link @(step == CheckoutStep.ReviewOrder ? "active" : "")"
+           href="@(allowPayment ? Url.Action("ReviewOrder", "Checkout", new { }) : "javascript:void(0)")"
+           style="@(allowPayment ? "" : "pointer-events:none; opacity:0.4;")">Betaling</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(step==CheckoutStep.Address ? "active" : "")"
-           asp-controller="Checkout" asp-action="Address">Personalia</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link @(step==CheckoutStep.Shipping ? "active" : "")"
-           asp-controller="Checkout" asp-action="Shipping">Levering</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link @(step==CheckoutStep.ReviewOrder ? "active" : "")"
-           asp-controller="Checkout" asp-action="ReviewOrder">Betaling</a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link @(step==CheckoutStep.Complete ? "active" : "")"
-           asp-controller="Checkout" asp-action="Complete">Fullført</a>
+        <a class="nav-link @(step == CheckoutStep.Complete ? "active" : "")"
+           href="@(allowComplete ? Url.Action("Complete", "Checkout", new { }) : "javascript:void(0)")"
+           style="@(allowComplete ? "" : "pointer-events:none; opacity:0.4;")">Fullført</a>
     </li>
 </ul>
 
-
 <div class="container mt-3">
     <div class="row g-3">
-        
         <div class="col-md-8">
             @RenderBody()
+            
+            <!-- Display error -->
+            @if (TempData["Error"] != null)
+            {
+                <div id="error-box" class="alert alert-danger text-center mt-3">
+                    @TempData["Error"]
+                </div>
+            }
+
+            <script>
+                document.addEventListener("DOMContentLoaded", () => {
+                    const box = document.getElementById("error-box");
+                    if (box) {
+                        // Remove error after 3 seconds
+                        setTimeout(() => {
+                            box.style.opacity = "0";
+                            box.style.transition = "opacity 0.5s ease";
+                            setTimeout(() => box.remove(), 500);
+                        }, 3000);
+                    }
+                });
+            </script>
         </div>
-        
+
         <!-- Summary -->
         <div class="summary col-md-4 text-white">
             <div class="list-group">
@@ -86,49 +117,41 @@
                     <div class="d-flex justify-content-between text-success"><h6>Rabatt på produkter</h6><h6 id="sum-discount">–</h6></div>
                     <div class="d-flex justify-content-between"><h6>Rabattkode</h6><h6 id="sum-code-discount">0%</h6></div>
                     <div class="d-flex justify-content-between"><h6>Frakt</h6><h6 id="sum-shipping">–</h6></div>
-                    <!-- Rabattkode -->
+                    
+                    <!-- Discountcode -->
                     <div class="mt-3">
                         <label for="discount-code" class="fw-semibold">Rabattkode</label>
                         <div class="d-flex gap-2">
-                            <input type="text" id="discount-code" class="form-control" placeholder="Skriv inn kode" />
-                            <button type="button" id="apply-discount" class="btn btn-dark">Bruk</button>
+                            <input type="text" id="discount-code" class="form-control" placeholder="Skriv inn rabattkode"/>
+                            <button type="button" id="apply-discount" class="btn-next w-25">Bruk</button>
                         </div>
                         <p id="discount-message" class="mt-1" style="font-size:14px;"></p>
                     </div>
 
                     <hr/>
                     <div class="d-flex justify-content-between fw-semibold"><span>Totalsum</span><span id="sum-total">–</span></div>
-                    
-                        
-                    <div class="d-grid mt-3"> <!-- skal fikse dette rote nede senere når shipping er på plass -->
+
+
+                    <div class="d-grid mt-3">
                         @if (!string.IsNullOrEmpty(btnText) && !string.IsNullOrEmpty(nextAction))
                         {
-                            if (disable)
+                            @if (step == CheckoutStep.Cart)
                             {
-                                <button class="btn-next w-100 mb-2" disabled aria-disabled="true">@btnText</button>
+                                <a class="btn-next w-100 mb-2" href="@Url.Action("Address", "Checkout")">@btnText</a>
                             }
-                            else
+                            else if (step == CheckoutStep.Address)
                             {
-                                if (step == CheckoutStep.Address)
-                                {
-                                    <!-- Button for select address form -->
-                                    <button type="submit" form="select-address-form" class="btn-next w-100 mb-2">@btnText</button>
-                                }
-                                else if (step == CheckoutStep.ReviewOrder)
-                                {
-                                    <form action="/checkout.html" method="GET">
-                                        <button type="submit" class="btn-next w-100 mb-2">@btnText</button>
-                                    </form>
-                                }
-                                else
-                                {
-                                    // Testing
-                                    var method = step == CheckoutStep.Cart && nextAction == "Address" ? "get" : "post";
-                                    
-                                    <form method="@method" asp-controller="Checkout" asp-action="@nextAction">
-                                        <a type="submit" class="btn-next w-100 mb-2">@btnText</a>
-                                    </form>
-                                }
+                                <button type="submit" form="select-address-form" class="btn-next w-100 mb-2">@btnText</button>
+                            }
+                            else if (step == CheckoutStep.Shipping)
+                            {
+                                <form method="get" asp-controller="Checkout" asp-action="ReviewOrder">
+                                    <button type="submit" class="btn-next w-100 mb-2">@btnText</button>
+                                </form>
+                            }
+                            else if (step == CheckoutStep.ReviewOrder)
+                            {
+                                <a href="/checkout.html" class="btn-next w-100 mb-2">@btnText</a>
                             }
                         }
                     </div>
@@ -136,13 +159,11 @@
                 </div>
             </div>
         </div>
-        
     </div>
 </div>
 
 <script src="~/js/components/shoppingCart.js" asp-append-version="true"></script>
 <script src="~/js/admin/discount.js" asp-append-version="true"></script>
-
 
 <script>
 // Fuction to run the Summary function on load

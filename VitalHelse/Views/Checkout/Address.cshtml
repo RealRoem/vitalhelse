@@ -2,9 +2,8 @@
 @model VitalHelse.Models.UserAddressViewModel
 
 @{
+    ViewBag.Title = "Personalia";
     Layout = "_CheckoutLayout";
-    ViewBag.Step = CheckoutStep.Address;
-
     var hasAddresses = Model.Existing != null && Model.Existing.Any(); // Checks if list with addresses exists and if there exists at least 1 element in there
     var showForm = !ViewData.ModelState.IsValid; // Checks if the model is not valid, show form if invalid (true), hide if valid (false)
 }
@@ -13,7 +12,7 @@
     @if (hasAddresses)
     {
         <div id="address-list-wrapper" style="@(showForm ? "display:none;" : "")">
-            <form id="select-address-form" method="post">
+            <form id="select-address-form" asp-action="SelectAddress" method="post">
                 @Html.AntiForgeryToken()
                 <ul class="list-group">
                     @for (var i = 0; i < Model.Existing.Count; i++)
@@ -25,7 +24,7 @@
                             <div class="row">
 
                                 <div class="col-1 align-content-center">
-                                    <input type="radio" class="btn-radio" name="SelectedAddressId" value="@userAddress.Id" @(isChecked ? "checked" : null)/>
+                                    <input type="radio" class="btn-radio address-radio" name="SelectedAddressId" value="@userAddress.Id" @(isChecked ? "checked" : null)/>
                                 </div>
 
                                 <div class="col-11">
@@ -60,7 +59,7 @@
                             </div>
                         </li>
                     }
-        
+
                     <li class="list-group-item py-3 px-6">
                         Ønsker du å legge til en ny adresse? <a href="#" id="show-form-link">Legg til ny adresse</a>
                     </li>
@@ -70,13 +69,15 @@
     }
     else
     {
-        <ul class="list-group">
-            <li id="no-address-box" class="list-group-item py-4 px-6" style="@(showForm ? "display:none;" : "")">
-                Du har ingen lagrede adresser. <a href="#" id="show-form-link">Legg til ny adresse</a>
-            </li>
-        </ul>
+        <form id="select-address-form" asp-action="SelectAddress" method="post">
+            <ul class="list-group">
+                <li id="no-address-box" class="list-group-item py-4 px-6" style="@(showForm ? "display:none;" : "")">
+                    Du har ingen lagrede adresser. <a href="#" id="show-form-link">Legg til ny adresse</a>
+                </li>
+            </ul>
+        </form>
     }
-    
+
     <!-- Form to add address -->
     <div id="add-address-form-wrapper" style="@(showForm ? "" : "display:none;")">
         <!-- Form for adding address -->
@@ -156,12 +157,33 @@
                 </li>
             </ul>
         </form>
-        
+
     </div>
 </div>
+
+
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />    
     <script src="~/js/utils/postLookup.js" asp-append-version="true"></script>
     <script src="~/js/components/addressFormManager.js" asp-append-version="true"></script>
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+        
+            const radios = document.querySelectorAll(".address-radio");
+        
+            radios.forEach(r => {
+                r.addEventListener("change", async () => {
+        
+                    const addressId = r.value;
+
+                    await fetch(`/Checkout/SetAddress?addressId=${addressId}`, {
+                        method: "POST"
+                    });
+                });
+            });
+        
+        });
+    </script>
 }

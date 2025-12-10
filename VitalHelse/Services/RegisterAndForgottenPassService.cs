@@ -32,7 +32,7 @@ public class RegisterAndForgottenPassService : IEmailSender
         var client = new SendGridClient(apiKey);
         var msg = new SendGridMessage()
         {
-            From = new EmailAddress("tormod@masdal.com", "Password Recovery"),
+            From = new EmailAddress("tormod@masdal.com", "VitalHelse Support"),
             Subject = subject,
             PlainTextContent = message,
             HtmlContent = message

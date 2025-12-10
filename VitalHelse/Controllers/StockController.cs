@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VitalHelse.Data;
 using VitalHelse.Models;
-using ClosedXML.Excel;
 
 namespace VitalHelse.Controllers;
 

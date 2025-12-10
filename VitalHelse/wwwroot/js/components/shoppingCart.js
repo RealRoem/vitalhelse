@@ -19,7 +19,7 @@ async function removItemShoppingCart(productId) {
         // If there is no items left, reload the entire page
         window.location.reload();
     }
-    Summary();
+    await Summary();
 }
 
 async function AddToCart(productId){
@@ -70,27 +70,32 @@ async function AddToCart(productId){
 // Helper that formats numers as norwegian currency (1000 as 1000,00 kr)
 const nok = new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK' });
 
-async function AddQuantity(productId, unitPrice) {
+async function AddQuantity(productId, campaignPrice, regularPrice) {
     const quantityElement = document.getElementById(`quantity-${productId}`);
-    if(!quantityElement) return; // if element does not exist
-    
     const totalElement = document.getElementById(`total-${productId}`);
+    const beforeElement = document.getElementById(`before-${productId}`);
+    
+    if(!quantityElement) return; // if element does not exist
 
     // Save old values in case of rollback, parse to int because we will treat it as a number
     const oldQuantity = parseInt(quantityElement.value, 10) || 0; // || 0 means if the field is not a number(empty or error) then use 0
-    //const oldTotal = totalElement.innerText;
     const oldTotal = totalElement ? totalElement.innerText : '';
+    const oldBefore = beforeElement ? beforeElement.innerText : '';
 
-    // Add quantity
+    // Update quantity
     const newQuantity = oldQuantity + 1;
-    
-    // Display the new value
     quantityElement.value = String(newQuantity);
-    // If in shopping cart view, update price
-    if(totalElement) {
-        totalElement.innerText = nok.format(newQuantity * unitPrice);
-    }
     
+    // If in shopping cart view, update price
+    if (totalElement) {
+        totalElement.innerText = nok.format(newQuantity * campaignPrice);
+    }
+
+    // Update before element if exists
+    if (beforeElement) {
+        beforeElement.innerText = nok.format(newQuantity * regularPrice);
+    }
+
     // If on product page, stop here
     const productPage = document.getElementById(`product-page`);
     if(productPage) return;
@@ -110,6 +115,7 @@ async function AddQuantity(productId, unitPrice) {
         // Rollback to the cart values before the error occured
         quantityElement.value = String(oldQuantity);
         if(totalElement) totalElement.innerText = oldTotal;
+        if(beforeElement) beforeElement.innerText = oldBefore;
 
         // Prints error message
         const msg = await response.text();
@@ -117,38 +123,39 @@ async function AddQuantity(productId, unitPrice) {
         setTimeout(() => document.getElementById("error-box").innerText = "", 3000);
     }
     else {
-        Summary();
+        await Summary();
     }
 }
 
-
-async function DecreaseQuantity(productId, unitPrice) {
-
+async function DecreaseQuantity(productId, campaignPrice, regularPrice) {
     const quantityElement = document.getElementById(`quantity-${productId}`);
-    if(!quantityElement) return;
-    
     const totalElement = document.getElementById(`total-${productId}`);
+    const beforeElement = document.getElementById(`before-${productId}`);
+
+    if(!quantityElement) return; // if element does not exist
 
     // Save old values in case of rollback, parse to int because we will treat it as a number
     const oldQuantity = parseInt(quantityElement.value, 10) || 0;
     const oldTotal = totalElement ? totalElement.innerText : '';
+    const oldBefore = beforeElement ? beforeElement.innerText : '';
     
     // Decrease quantity
     let newQuantity = oldQuantity - 1;
     
     // If quatity is 0 or less set to 1
-    if (newQuantity <= 0) {
-        newQuantity = 1;
-    }
+    if (newQuantity <= 0) newQuantity = 1;
    
     // Display new value
     quantityElement.value = String(newQuantity);
     
     // If in shopping cart view, update price
     if (totalElement) {
-        totalElement.innerText = nok.format(newQuantity * unitPrice);
+        totalElement.innerText = nok.format(newQuantity * campaignPrice);
     }
-    
+    // Update before element if exists
+    if (beforeElement) {
+        beforeElement.innerText = nok.format(newQuantity * regularPrice);
+    }
 
     // If on product page, stop here
     const productPage = document.getElementById(`product-page`);
@@ -157,8 +164,7 @@ async function DecreaseQuantity(productId, unitPrice) {
     // If in shopping cart, send PATCH-request to server
     // Saves antiforgerytoken to protect against CSRF-attacks
     const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-
-    // Saves the response from the decreaseQuantity function, so that we may print out error message if they try to decrease more than allowed
+   
     const response = await fetch(`/ShoppingCart/DecreaseQuantity/?id=${productId}`, {
         method: 'PATCH',
         headers: { 'RequestVerificationToken': token },
@@ -173,6 +179,7 @@ async function DecreaseQuantity(productId, unitPrice) {
             // Rollback to the cart values before the error occured
             quantityElement.value = String(oldQuantity);
             if(totalElement) totalElement.innerText = oldTotal;
+            if(beforeElement) beforeElement.innerText = oldBefore;
         }
         
         // Prints error message
@@ -181,16 +188,15 @@ async function DecreaseQuantity(productId, unitPrice) {
         setTimeout(() => document.getElementById("error-box").innerText = "", 3000);
     }
     else {
-        Summary();
+        await Summary();
     }
 }
 
 
-async function UpdateQuantity(productId, unitPrice) {
-    
-    // Get the inputfield for quantity and the total price element
+async function UpdateQuantity(productId, campaignPrice, regularPrice) {
     const quantityElement = document.getElementById(`quantity-${productId}`);
     const totalElement = document.getElementById(`total-${productId}`);
+    const beforeElement = document.getElementById(`before-${productId}`);
     
     // Parse inputvalue to int
     let newQuantity = parseInt(quantityElement.value, 10);
@@ -200,11 +206,17 @@ async function UpdateQuantity(productId, unitPrice) {
         // Set the value to 1 and update summary
         newQuantity = 1;
         quantityElement.value = 1;
-        Summary();
+        await Summary();
     }
 
-    // Update the total price
-    totalElement.innerText = nok.format(newQuantity * unitPrice);
+    // Update total
+    if (totalElement) {
+        totalElement.innerText = nok.format(newQuantity * campaignPrice);
+    }
+    // Update before element if exists
+    if (beforeElement) {
+        beforeElement.innerText = nok.format(newQuantity * regularPrice);
+    }
     
     // Saves antiforgerytoken to protect against CSRF-attacks
     const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
@@ -225,10 +237,13 @@ async function UpdateQuantity(productId, unitPrice) {
         // If the server adjusted the quantity, update it in the input box
         const data = await response.json();
         quantityElement.value = data.correctedQuantity;
-        totalElement.innerText = nok.format(data.correctedQuantity * unitPrice);
-        Summary();
+        if (totalElement) totalElement.innerText = nok.format(data.correctedQuantity * campaignPrice);
+        if (beforeElement) beforeElement.innerText = nok.format(data.correctedQuantity * regularPrice);
+        
+        await Summary();
     }
 }
+
 function UpdateQuantityLocal(productId) {
     const quantityElement = document.getElementById(`quantity-${productId}`);
 
@@ -255,19 +270,18 @@ async function Summary() {
         if (!response.ok) throw new Error();
 
         // Save the JSON-data
-        const s = await response.json();
+        const data  = await response.json();
 
         // Update the HTML
-        document.getElementById('sum-products').textContent = nok.format(s.sumProducts);
-        document.getElementById('sum-before').textContent = nok.format(s.sumBefore);
-        // Show a "-" when it is a discount
-        document.getElementById('sum-discount').textContent = (s.discount > 0 ? '-' : '') + nok.format(Math.abs(s.discount));
-        document.getElementById('sum-shipping').textContent = nok.format(s.shipping);
-        document.getElementById('sum-total').textContent = nok.format(s.total);
+        document.getElementById("sum-products").innerText = nok.format(data.sumProducts);
+        document.getElementById("sum-before").innerText = nok.format(data.sumBefore);
+        document.getElementById('sum-discount').textContent = (data.discount > 0 ? '-' : '') + nok.format(Math.abs(data.discount));  // Show a "-" when it is a discount
+        document.getElementById('sum-shipping').textContent = nok.format(data.shipping);
+        document.getElementById('sum-total').textContent = nok.format(data.total);
         // Vis rabattkode-prosent i sammendraget
         if (document.getElementById("sum-code-discount")) {
             document.getElementById("sum-code-discount").textContent =
-                s.codeDiscountPercent > 0 ? `-${s.codeDiscountPercent}%` : "0%";
+                data.codeDiscountPercent > 0 ? `-${data.codeDiscountPercent}%` : "0%";
         }
 
     } catch {// If we get an error show 0,00 kr

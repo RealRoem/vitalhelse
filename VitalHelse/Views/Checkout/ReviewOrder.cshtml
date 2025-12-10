@@ -1,47 +1,68 @@
+@model ReviewOrderViewModel
 @using VitalHelse.Models.Enums
-@model VitalHelse.Models.ReviewOrderViewModel
+
 @{
-    ViewData["Title"] = "Leveringsadresse";
-    ViewBag.Step = CheckoutStep.ReviewOrder;
+    ViewBag.Title = "Betaling";
     Layout = "_CheckoutLayout";
 }
 
-<h2 class="text-start">Se gjennom bestilling</h2>
+<h2 class="text-start mb-4 fw-medium">Se gjennom bestillingen</h2>
 
+<!-- PRODUKTER -->
 <section class="mb-4">
-    <h4 class="text-start">Produkter</h4>
+    <h4 class="text-start fw-semibold">Produkter</h4>
     <ul class="list-group">
+
         @foreach (var item in Model.CartProducts)
         {
-            <li class="list-group-item py-4 px-6">
-                <div  class="row align-items-center gy-3">
+            var unitPrice = item.Product.ProductCampaignPrice ?? item.Product.ProductPriceInVAT;
+            var totalPrice = unitPrice * item.Quantity;
 
-                    <!-- Product image -->
+            <li class="list-group-item py-3 px-4">
+                <div class="row align-items-center gy-3">
+                    
                     <div class="col-3 col-sm-2">
                         <img class="w-75" src="@(item.Product.ProductPictures.FirstOrDefault()?.PicturePath ?? "/images/products/default.png")"
                              alt="@item.Product.ProductName"/>
                     </div>
 
-                    <!-- Product name and stock -->
                     <div class="col">
                         <h6 class="mb-2">@item.Product.ProductName</h6>
                         <div>Antall: @item.Quantity</div>
                     </div>
-                    
-                    <!-- Price -->
-                    <div class="col-4 col-sm-3 col-lg-2 text-end">
-                        <div id="total-@item.ProductId" class="fw-semibold">@(item.Product.ProductCampaignPrice * item.Quantity ?? item.Product.ProductPriceInVAT * item.Quantity) kr</div>
-                    </div>
 
+                    <div class="col text-end">
+                        @if (item.Product.ProductCampaignPrice != null)
+                        {
+                            var beforeTotal = item.Product.ProductPriceInVAT * item.Quantity;
+                            var afterTotal = item.Product.ProductCampaignPrice.Value * item.Quantity;
+
+                            <!-- Total rice without campaign price -->
+                            <div id="before-@item.ProductId" class="text-muted text-decoration-line-through mt-0">
+                                @beforeTotal.ToString("N2") kr <!-- Force razor to use 2 decimals, 299,00 -->
+                            </div>
+
+                            <!-- Total price with campaign price -->
+                            <div id="total-@item.ProductId" class="fw-semibold">
+                                @afterTotal.ToString("N2") kr
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- IKKE PÅ SALG – vis bare ordinær pris × antall -->
+                            <div id="total-@item.ProductId" class="fw-semibold">
+                                @((item.Product.ProductPriceInVAT * item.Quantity).ToString("N2")) kr
+                            </div>
+                        }
+                    </div>
                 </div>
             </li>
         }
     </ul>
-
 </section>
 
-<section>
-    <h4 class="text-start">Leveringsadresse</h4>
+<section class="mb-4">
+    <h4 class="text-start fw-semibold">Leveringsadresse</h4>
     <ul class="list-group">
         <li class="list-group-item">
             <div class="row">
@@ -49,7 +70,7 @@
                     <div class="row align-items-center">
 
                         <div class="col-6">
-                            <label class="d-flex text-start py-2">
+                            <label class="d-flex text-start py-2 justify-content-center">
                                 <div class="flex-grow-1">
                                     <h6>@Model.UserAddress.FirstName @Model.UserAddress.LastName</h6>
                                     <h6>@Model.UserAddress.Street</h6>
@@ -70,3 +91,36 @@
     </ul>
 </section>
 
+<section class="mb-4">
+    <h4 class="text-start fw-semibold">Leveringsmetode</h4>
+    <ul class="list-group">
+        <li class="list-group-item">
+            <div class="row">
+                <div class="col">
+                    <div class="row align-items-center py-2">
+                        <div class="col-6">
+                            <div class="col-6 d-flex align-items-center">
+                                <h6 class="m-0">@Model.ShippingMethod.MethodName</h6>
+                            </div>
+                        </div>
+                        
+                        <div class="col-6 d-flex justify-content-end align-items-center">
+                            <h6 class="m-0">@Model.ShippingPrice.ToString("N2") kr</h6>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </li>
+    </ul>
+</section>
+
+
+
+<script>
+    // When page is loaded
+    document.addEventListener("DOMContentLoaded", function () {
+        if (typeof Summary === "function") {
+            Summary();
+        }
+    });
+</script>

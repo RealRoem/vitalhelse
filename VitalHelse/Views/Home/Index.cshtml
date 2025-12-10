@@ -1,8 +1,88 @@
-﻿@{
+﻿@model VitalHelse.ViewModels.HomePageViewModel
+@{
     ViewData["Title"] = "Home Page";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+@if (Model.Banners != null && Model.Banners.Any())
+{
+    <div class="hp-banner-carousel-container">
+        <div class="hp-banner-carousel" id="homeBannerCarousel" data-interval="@(Model.Settings.CarouselInterval * 1000)">
+            <div class="hp-carousel-track">
+                @foreach (var banner in Model.Banners)
+                {
+                    <div class="hp-carousel-slide" data-banner-id="@banner.BannerImageId">
+                        @if (!string.IsNullOrEmpty(banner.LinkType) && banner.LinkType != "None" && !string.IsNullOrEmpty(banner.LinkTarget))
+                        {
+                            @if (banner.LinkType == "Category")
+                            {
+                                <a href="/produkt/@banner.LinkTarget" class="hp-banner-link">
+                                    <img src="@banner.ImagePath" alt="@banner.AltText" class="hp-banner-image" />
+                                </a>
+                            }
+                            else if (banner.LinkType == "Product")
+                            {
+                                <a href="/produkt/detaljer/@banner.LinkTarget" class="hp-banner-link">
+                                    <img src="@banner.ImagePath" alt="@banner.AltText" class="hp-banner-image" />
+                                </a>
+                            }
+                            else if (banner.LinkType == "ExternalUrl")
+                            {
+                                <a href="@banner.LinkTarget" class="hp-banner-link" target="_blank" rel="noopener noreferrer">
+                                    <img src="@banner.ImagePath" alt="@banner.AltText" class="hp-banner-image" />
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <img src="@banner.ImagePath" alt="@banner.AltText" class="hp-banner-image" />
+                        }
+                    </div>
+                }
+            </div>
+            
+            @if (Model.Banners.Count > 1)
+            {
+                <button class="hp-carousel-control hp-prev" aria-label="Previous slide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+                <button class="hp-carousel-control hp-next" aria-label="Next slide">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+                
+                <div class="hp-carousel-indicators">
+                    @for (int i = 0; i < Model.Banners.Count; i++)
+                    {
+                        <button class="hp-indicator @(i == 0 ? "active" : "")" data-slide="@i" aria-label="Go to slide @(i + 1)"></button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+
+<div class="h2 hp-all-products">Alle Produkter</div>
+<div class="container">
+    @if (Model.Products == null || !Model.Products.Any())
+    {
+        <p class="text-muted text-center mt-4">Ingen Produkter funnet.</p>
+    }
+    else
+    {
+        @await Html.PartialAsync("_ProductGrid",
+            Model.Products,
+            new ViewDataDictionary(ViewData)
+            {
+                { "IsAuthenticated", User.Identity?.IsAuthenticated ?? false },
+                { "IsAdminView", false }
+            })
+    }
 </div>
+
+@section Scripts {
+    <script src="~/js/components/homeCarousel.js" asp-append-version="true"></script>
+}

@@ -8,7 +8,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - VitalHelse Admin</title>
-
+    <link rel="icon" type="image/png" href="~/leaf_logo.svg" />
+    
     <!-- 1. Core styles -->
     <link rel="stylesheet" href="~/css/pages/site.css" asp-append-version="true" />
 
@@ -24,10 +25,13 @@
     <link rel="stylesheet" href="~/css/pages/adduser.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/pages/adminStaffPage.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/pages/editroles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/components/homeCarousel.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/css/components/homePageManagement.css" asp-append-version="true"/>
 
     <link rel="stylesheet" href="~/css/pages/adminStockCount.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/components/excelExportButtonStockCountFilter.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/components/sideBarFilter.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -45,23 +49,20 @@
                class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Products" ? "active" : "")">Produkter</a>
             <a asp-controller="Admin" asp-action="Categories"
                class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Categories" ? "active" : "")">Kategorier</a>
-            <a asp-controller="Admin" asp-action="Banners"
+            <a asp-controller="HomePageManagement" asp-action="Index"
                class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Banners" ? "active" : "")">Bannere</a>
-            <a asp-controller="DiscountCode"
-               asp-action="Index"
-               class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Rabbatkoder" ? "active" : "")">
-                Rabattkoder
-            </a>
-            <a asp-controller="CategoryDiscount"
-               asp-action="Index"
-               class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Rabattsatser" ? "active" : "")">
-                Rabattsatser
-            </a>
-            <a asp-controller="Campaign"
-               asp-action="Index"
-               class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Kampanjer" ? "active" : "")">
-                Kampanjer
-            </a>
+            <a asp-controller="DiscountCode" asp-action="Index"
+               class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Rabattkoder" ? "active" : "")">Rabattkoder</a>
+            <a asp-controller="CategoryDiscount" asp-action="Index"
+               class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Rabattsatser" ? "active" : "")">Rabattsatser</a>
+            <a asp-controller="Campaign" asp-action="Index"
+               class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "Kampanjer" ? "active" : "")">Kampanjer</a>
+            <a asp-controller="ShippingManagement" asp-action="Shipping"
+               class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "ShippingManagement" ? "active" : "")">Frakt</a>
+            <a asp-controller="OrderManagement" asp-action="Orders"
+               class="@(ViewContext.RouteData.Values["controller"]?.ToString() == "OrderManagement" ? "active" : "")">Ordre</a>
+            <a asp-controller="UserManagement" asp-action="Index"
+               class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Banners" ? "active" : "")">Ansatte</a>
         </nav>
 
     </aside>

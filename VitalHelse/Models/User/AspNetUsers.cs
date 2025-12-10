@@ -34,7 +34,7 @@ public class AspNetUsers : IdentityUser
     public ICollection<Order> Orders { get; } = new List<Order>();
     public ICollection<CartProduct> ShoppingCarts { get; } = new List<CartProduct>();
     
-    
     public ICollection<UserAddress> UserAddresses { get; } = new List<UserAddress>();
     public int? DefaultUserAddressId { get; set; }
+    public int? DefaultShippingMethodId { get; set; }
 }
