@@ -1,0 +1,28 @@
+@using VitalHelse.Services
+@model PriceInfo
+@{
+    // Everyone sees prices including VAT. Business customers and staff also get the "excl. VAT" figures,
+    // and the MVA toggle in the header switches between the two.
+    var showEx = Pricing.SeesExVat(User);
+    var tag = ViewData["Tag"] as string ?? "span";
+    var newClass = Model.OnSale ? "price-new" : "price-regular";
+}
+
+@Html.Raw($"<{tag} class=\"{newClass} price-incvat\">{Pricing.Money(Model.Current)}</{tag}>")
+@if (Model.OnSale)
+{
+    <span class="price-old price-incvat">@Pricing.Money(Model.Original)</span>
+}
+@if (showEx)
+{
+    @Html.Raw($"<{tag} class=\"{newClass} price-exvat\">{Pricing.Money(Pricing.ExVat(Model.Current))}</{tag}>")
+    if (Model.OnSale)
+    {
+        <span class="price-old price-exvat">@Pricing.Money(Pricing.ExVat(Model.Original))</span>
+    }
+}
+@if (showEx)
+{
+    <small class="vat-note price-incvat">inkl. mva</small>
+    <small class="vat-note price-exvat">eks. mva</small>
+}

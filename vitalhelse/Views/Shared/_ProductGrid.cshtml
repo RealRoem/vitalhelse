@@ -1,4 +1,5 @@
 @using VitalHelse.Helpers
+@using VitalHelse.Services
 @model IEnumerable<VitalHelse.Models.Product>
 @using Microsoft.AspNetCore.Authorization
 @inject IAuthorizationService AuthorizationService
@@ -17,22 +18,8 @@ bool isAdminView = ViewData["IsAdminView"] as bool? ?? false;
     {
     var isHidden = product.LabelDescription?.ToLower().Contains("hidden") ?? false;
 
-    decimal? original = product.ProductPriceInVAT;
-    decimal? campaign = product.ProductCampaignPrice;
-    decimal? businessPrice = product.ProductPriceExVAT;
-    decimal businessCampaign = 0;
-    int discountPercent = 0;
-
-    if (User.IsInRole("BusinessCustomer") && campaign.HasValue && businessPrice.HasValue && original.HasValue && original.Value > 0)
-    {
-    decimal vatFactor = businessPrice.Value / original.Value;
-    businessCampaign = campaign.Value * vatFactor;
-    discountPercent = (int)Math.Round((1 - (campaign.Value / original.Value)) * 100);
-    }
-    else if (campaign.HasValue && original.HasValue && original.Value > 0)
-    {
-    discountPercent = (int)Math.Round((1 - (campaign.Value / original.Value)) * 100);
-    }
+    var price = Pricing.Info(product);
+    var soldOut = product.StockCount.HasValue && product.StockCount.Value <= 0;
 
     <div class="product-card @(isHidden ? "hidden-product" : "")">
 
@@ -45,9 +32,9 @@ bool isAdminView = ViewData["IsAdminView"] as bool? ?? false;
         </button>
 
         <!-- Rabattsirkel -->
-        @if (campaign.HasValue && discountPercent > 0)
+        @if (price.OnSale && price.Percent > 0)
         {
-        <div class="discount-circle">-@discountPercent%</div>
+        <div class="discount-circle">-@price.Percent%</div>
         }
 
         <!-- Klikkbart bilde -->
@@ -66,28 +53,17 @@ bool isAdminView = ViewData["IsAdminView"] as bool? ?? false;
 
         <!-- Pris -->
         <div class="price">
-            @if ((User.IsInRole("BusinessCustomer") || authorized) && businessCampaign != 0 && businessPrice.HasValue)
-            {
-            <span class="price-new price-incvat">@campaign!.Value.ToString("0.00") kr</span>
-            <span class="price-old price-incvat">@original!.Value.ToString("0.00") kr</span>
-            <span class="price-new price-exvat">@businessCampaign.ToString("0.00") kr</span>
-            <span class="price-old price-exvat">@businessPrice.Value.ToString("0.00") kr</span>
-            }
-            else if ((User.IsInRole("BusinessCustomer") || authorized) && businessPrice.HasValue && original.HasValue)
-            {
-            <span class="price-regular price-exvat">@businessPrice.Value.ToString("0.00") kr</span>
-            <span class="price-regular price-incvat">@original.Value.ToString("0.00") kr</span>
-            }
-            else if (campaign.HasValue && original.HasValue)
-            {
-            <span class="price-new">@campaign.Value.ToString("0.00") kr</span>
-            <span class="price-old">@original.Value.ToString("0.00") kr</span>
-            }
-            else if (original.HasValue)
-            {
-            <span class="price-regular">@original.Value.ToString("0.00") kr</span>
-            }
+            <partial name="_Price" model="price" />
         </div>
+
+        @if (soldOut)
+        {
+            <div class="stock-out" style="color:#b3261e; font-weight:600; margin-bottom:6px;">Utsolgt</div>
+        }
+        else if (product.StockCount.HasValue && product.StockCount.Value <= 5)
+        {
+            <div class="stock-low" style="color:#a15c00; font-size:13px; margin-bottom:6px;">Kun @product.StockCount igjen</div>
+        }
 
         <!-- Kjøp-linje -->
         <div class="product-buy-row">
@@ -97,8 +73,8 @@ bool isAdminView = ViewData["IsAdminView"] as bool? ?? false;
                 <button type="button" class="qty-btn" onclick="ChangeQty(@product.ProductId, 1)">+</button>
             </div>
 
-            <button type="button" class="btn-submit buy-btn" onclick="AddToCart(@product.ProductId)">
-                Kjøp
+            <button type="button" class="btn-submit buy-btn" onclick="AddToCart(@product.ProductId)" @(soldOut ? "disabled" : "")>
+                @(soldOut ? "Utsolgt" : "Kjøp")
             </button>
         </div>
 
@@ -166,59 +142,6 @@ else
             }
         });
     })();
-</script>
-
-<!-- ADD TO CART + QTY -->
-<script>
-    async function AddToCart(productId) {
-        const isAuthenticated = @(User.Identity.IsAuthenticated.ToString().ToLower());
-
-        const quantityElement = document.getElementById(`quantity-${productId}`);
-        const quantity = quantityElement ? parseInt(quantityElement.value, 10) || 1 : 1;
-
-        const tokenField = document.querySelector('input[name="__RequestVerificationToken"]');
-        if (!tokenField) {
-            console.error("Fant ikke antiforgery-token");
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append("id", productId);
-        formData.append("quantity", quantity);
-
-        const response = await fetch("/ShoppingCart/AddToCart", {
-            method: 'POST',
-            headers: {
-                'RequestVerificationToken': tokenField.value
-            },
-            body: formData
-        });
-
-        if (!response.ok) {
-            const msg = await response.text();
-            const errorBox = document.getElementById("error-box");
-            if (errorBox) {
-                errorBox.innerText = msg;
-                setTimeout(() => errorBox.innerText = "", 3000);
-            }
-        } else {
-            if (!isAuthenticated) {
-                window.location.href = "/identity/account/login";
-                return;
-            }
-            window.location.reload();
-        }
-    }
-
-    function ChangeQty(productId, delta) {
-        const input = document.getElementById(`quantity-${productId}`);
-        if (!input) return;
-
-        let value = parseInt(input.value) || 1;
-        value += delta;
-        if (value < 1) value = 1;
-        input.value = value;
-    }
 </script>
 
 <!-- VIS MER + FADE-IN -->

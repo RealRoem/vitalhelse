@@ -320,3 +320,9 @@ a:hover {
     margin: 0 auto;
     padding: 40px 0;
 }
+
+
+/* MVA toggle: show prices incl. or excl. VAT (set on <html data-vat="inc|ex"> from the header toggle) */
+html[data-vat="ex"] .price-incvat { display: none !important; }
+html:not([data-vat="ex"]) .price-exvat { display: none !important; }
+.vat-note { color: #777; font-size: 12px; margin-left: 4px; }

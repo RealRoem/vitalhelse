@@ -1,0 +1,26 @@
+@using VitalHelse.Services
+@using VitalHelse.Models
+@model (Product Product, int Quantity)
+@{
+    // Line total for a product in the cart or on an order. The cart script updates these elements when the quantity changes.
+    var price = Pricing.Info(Model.Product);
+    var showEx = Pricing.SeesExVat(User);
+}
+
+<div class="text-end">
+    @if (price.OnSale)
+    {
+        <div class="text-muted text-decoration-line-through line-old-inc price-incvat">@Pricing.Money(price.Original * Model.Quantity)</div>
+    }
+    <div class="fw-semibold line-total-inc price-incvat">@Pricing.Money(price.Current * Model.Quantity)</div>
+    @if (showEx)
+    {
+        if (price.OnSale)
+        {
+            <div class="text-muted text-decoration-line-through line-old-ex price-exvat">@Pricing.Money(Pricing.ExVat(price.Original) * Model.Quantity)</div>
+        }
+        <div class="fw-semibold line-total-ex price-exvat">@Pricing.Money(Pricing.ExVat(price.Current) * Model.Quantity)</div>
+        <small class="text-muted price-incvat">inkl. mva</small>
+        <small class="text-muted price-exvat">eks. mva</small>
+    }
+</div>

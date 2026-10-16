@@ -1,3 +1,4 @@
+@using VitalHelse.Services
 @model IEnumerable<VitalHelse.Models.ReccomendationsViewModel>
 
 <div class="recommendations-container">
@@ -20,19 +21,12 @@
                 <div class="recommendations-grid" id="recommendationsGrid">
                     @foreach (var product in Model)
                     {
-                        var original = product.ProductPriceInVAT;
-                        var campaign = product.ProductCampaignPrice;
-                        var discountPercent = 0;
-
-                        if (campaign.HasValue && original > 0)
-                        {
-                            discountPercent = (int)Math.Round((1 - (campaign.Value / original)) * 100);
-                        }
+                        var price = new PriceInfo(product.ProductPriceInVAT, product.ProductCampaignPrice);
                         
                         <div class="recommendation-card">
-                            @if (campaign.HasValue)
+                            @if (price.OnSale && price.Percent > 0)
                             {
-                                <div class="discount-badge">-@discountPercent%</div>
+                                <div class="discount-badge">-@price.Percent%</div>
                             }
                             
                             <div class="product-image">
@@ -67,15 +61,7 @@
                                 }
                                 
                                 <div class="product-price">
-                                    @if (campaign.HasValue)
-                                    {
-                                        <span class="price price-new">@campaign.Value.ToString("0.00") kr</span>
-                                        <span class="price-old">@original.ToString("0.00") kr</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="price">@original.ToString("0.00") kr</span>
-                                    }
+                                    <partial name="_Price" model="price" />
                                 </div>
                                 
                                 @if (product.StockCount.HasValue)

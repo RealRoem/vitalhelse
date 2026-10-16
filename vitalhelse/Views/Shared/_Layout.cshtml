@@ -1,4 +1,4 @@
-﻿@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Http.Extensions
 @inject IAuthorizationService AuthorizationService
 
@@ -30,7 +30,7 @@
 
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nb">
 <head>
     <link rel="canonical" href="@Context.Request.GetDisplayUrl()" />
 
@@ -59,7 +59,6 @@
     <link rel="stylesheet" href="~/css/components/homeCarousel.css" asp-append-version="true"/>
     <link rel="stylesheet" href="~/css/components/Reccomendations.css" asp-append-version="true"/>
 
-    <link rel="stylesheet" href="~/VitalHelse.styles.css" asp-append-version="true"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;500&family=Raleway:wght@300;500;700&display=swap" rel="stylesheet">
@@ -68,6 +67,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@100..900&display=swap" rel="stylesheet">
+    @if (Pricing.SeesExVat(User))
+    {
+        <script>
+            // Remember whether prices are shown with or without MVA (the toggle in the header)
+            try { document.documentElement.dataset.vat = localStorage.getItem("showExVat") === "1" ? "ex" : "inc"; }
+            catch (e) { document.documentElement.dataset.vat = "inc"; }
+        </script>
+    }
+    else
+    {
+        <script>document.documentElement.dataset.vat = "inc";</script>
+    }
 </head>
 <body>
 <header>
@@ -271,6 +282,11 @@
 <script src="~/js/components/navbarAnimation.js" asp-append-version="true"></script>
 <script src="~/js/temp/sidebarFilter.js" asp-append-version="true"></script>
 <script src="~/js/components/cartCount.js" asp-append-version="true"></script>
+
+@* One anti-forgery token and the login state for all cart scripts on every page *@
+<form id="global-token-form" class="d-none">@Html.AntiForgeryToken()</form>
+<script>window.isAuthenticated = @(User.Identity?.IsAuthenticated == true ? "true" : "false");</script>
+<script src="~/js/components/shoppingCart.js" asp-append-version="true"></script>
 
 @await RenderSectionAsync("Scripts", required: false)
 </body>

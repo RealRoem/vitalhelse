@@ -44,13 +44,14 @@ else
                     <ul class="list-group mb-3">
                         @foreach (var item in order.OrderProducts)
                         {
+                            // The price the customer paid, not today's price
+                            var unit = item.UnitPrice > 0 ? item.UnitPrice : VitalHelse.Services.Pricing.Effective(item.Product);
                             <li class="list-group-item d-flex justify-content-between">
-                                <div>
+                                <div class="text-start">
                                     <div class="fw-semibold">@item.Product.ProductName x @item.Quantity stk</div>
+                                    <div class="small text-muted text-start">@VitalHelse.Services.Pricing.Money(unit) per stk</div>
                                 </div>
-                                <div class="fw-semibold">
-                                    @(((item.Product.ProductCampaignPrice ?? item.Product.ProductPriceInVAT)*item.Quantity).ToString("N2")) kr
-                                </div>
+                                <div class="fw-semibold">@VitalHelse.Services.Pricing.Money(unit * item.Quantity)</div>
                             </li>
                         }
                     </ul>
@@ -78,14 +79,25 @@ else
                     <ul class="list-group mb-3">
                         <li class="list-group-item d-flex justify-content-between">
                             <span>Metode: <strong>@order.ShippingMethodName</strong></span>
-                            <span>Pris: <strong>@order.ShippingPrice.ToString("N2") kr</strong></span>
+                            <span>Pris: <strong>@VitalHelse.Services.Pricing.Money(order.ShippingPrice)</strong></span>
                         </li>
                     </ul>
 
                     <!-- TOTALSUM -->
+                    @if (!string.IsNullOrEmpty(order.DiscountCodeId))
+                    {
+                        <div class="d-flex justify-content-between text-success border-top pt-3">
+                            <span>Rabattkode:</span>
+                            <span>@order.DiscountCodeId</span>
+                        </div>
+                    }
                     <div class="d-flex justify-content-between border-top pt-3">
                         <span class="fw-semibold">Totalsum:</span>
-                        <span class="fw-bold">@order.TotalCost.ToString("N2") kr</span>
+                        <span class="fw-bold">@VitalHelse.Services.Pricing.Money(order.TotalCost)</span>
+                    </div>
+                    <div class="d-flex justify-content-between text-muted small">
+                        <span>Herav MVA (25 %):</span>
+                        <span>@VitalHelse.Services.Pricing.Money(VitalHelse.Services.Pricing.VatPart(order.TotalCost))</span>
                     </div>
                 </div>
 

@@ -1,10 +1,20 @@
-@using VitalHelse.Models.Enums
-@model VitalHelse.Models.UserAddress
-
 @{
-    ViewBag.Title = "title";
-    Layout = "_CheckoutLayout";
+    ViewBag.Title = "Takk for bestillingen";
+    Layout = "_Layout";
+    var orderId = TempData["OrderId"];
 }
 
-
-gratla
+<div class="container py-5 text-center" style="max-width: 640px;">
+    <h1 class="mb-3">Takk for bestillingen!</h1>
+    @if (orderId != null)
+    {
+        <p class="lead">Ordrenummer: <strong>#@orderId</strong></p>
+    }
+    <p class="text-muted">
+        Dette er en demobestilling. Ingen betaling er gjennomført og ingen varer sendes.
+    </p>
+    <div class="d-flex gap-2 justify-content-center mt-4">
+        <a class="btn btn-success" href="/">Tilbake til forsiden</a>
+        <a class="btn btn-outline-secondary" href="/Identity/Account/Manage/Order">Mine bestillinger</a>
+    </div>
+</div>

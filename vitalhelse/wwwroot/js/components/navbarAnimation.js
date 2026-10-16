@@ -15,20 +15,12 @@ window.addEventListener("scroll", function() {
 
 document.addEventListener("DOMContentLoaded", () => {
     const toggle = document.getElementById("myToggle");
+    if (!toggle) return; // only business customers and staff have the MVA toggle
 
+    // The price spans for both views are in the page; CSS on <html data-vat> shows the right ones,
+    // which also covers content added later (recommendations, cart rows).
     function updatePriceView() {
-        const incVat = document.querySelectorAll(".price-incvat");
-        const exVat = document.querySelectorAll(".price-exvat");
-
-        if (toggle.checked) {
-            // Vis pris uten MVA
-            exVat.forEach(x => x.style.display = "");
-            incVat.forEach(x => x.style.display = "none");
-        } else {
-            // Vis pris med MVA
-            exVat.forEach(x => x.style.display = "none");
-            incVat.forEach(x => x.style.display = "");
-        }
+        document.documentElement.dataset.vat = toggle.checked ? "ex" : "inc";
     }
 
     // 🔹 Last toggle-verdi fra localStorage
@@ -46,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 document.addEventListener("DOMContentLoaded", () => {
     const toggle = document.getElementById("myToggle");
+    if (!toggle) return;
     const inc = document.querySelector(".vat-label-inc");
     const ex = document.querySelector(".vat-label-ex");
 

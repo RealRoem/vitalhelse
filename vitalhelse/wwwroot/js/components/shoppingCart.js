@@ -1,291 +1,217 @@
+// Shopping cart behaviour shared by the product grid, product page and the checkout steps.
+
+const MAX_QUANTITY = 99;
+
+// Norwegian money format that matches the server (1 234,50 kr)
+function money(value) {
+    return Number(value).toLocaleString('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kr';
+}
+
+function antiForgeryToken() {
+    return document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+}
+
+function showCartMessage(text, isError) {
+    let box = document.getElementById('cart-toast');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'cart-toast';
+        box.setAttribute('role', 'status');
+        box.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:2000;padding:12px 18px;border-radius:8px;' +
+            'color:#fff;font-size:15px;box-shadow:0 4px 14px rgba(0,0,0,.25);transition:opacity .3s;max-width:320px;';
+        document.body.appendChild(box);
+    }
+    box.textContent = text;
+    box.style.background = isError ? '#b3261e' : '#3b6b4a';
+    box.style.opacity = '1';
+    clearTimeout(box._timer);
+    box._timer = setTimeout(() => { box.style.opacity = '0'; }, 3000);
+
+    // Legacy inline error box on the product page
+    const legacy = document.getElementById('error-box');
+    if (legacy) legacy.innerText = isError ? text : '';
+}
+
+function clampQuantity(value) {
+    const n = parseInt(value, 10);
+    if (isNaN(n) || n < 1) return 1;
+    return Math.min(n, MAX_QUANTITY);
+}
+
 async function removItemShoppingCart(productId) {
-
-    // Saves antiforgerytoken to protect against CSRF-attacks
-    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-
-    // Fetch the delete function from the controller
-    await fetch(`/ShoppingCart/Delete?id=${productId}`, {
+    const response = await fetch(`/ShoppingCart/Delete?id=${productId}`, {
         method: 'DELETE',
-        headers: {
-            'RequestVerificationToken': token
-        }
+        headers: { 'RequestVerificationToken': antiForgeryToken() }
+    });
+    if (!response.ok) return showCartMessage('Kunne ikke fjerne varen. Prøv igjen.', true);
+
+    document.getElementById(`row-${productId}`)?.remove();
+
+    if (document.querySelectorAll('[data-line]').length === 0) {
+        window.location.reload(); // shows the empty-cart message
+        return;
+    }
+    await Summary();
+    if (typeof refreshCartCount === 'function') refreshCartCount();
+}
+
+async function AddToCart(productId) {
+    // Guests are sent to log in first
+    if (window.isAuthenticated === false) {
+        const here = window.location.pathname + window.location.search;
+        window.location.href = `/identity/account/login?returnUrl=${encodeURIComponent(here)}`;
+        return;
+    }
+
+    const quantityElement = document.getElementById(`quantity-${productId}`);
+    const quantity = quantityElement ? clampQuantity(quantityElement.value) : 1;
+
+    const formData = new FormData();
+    formData.append('id', productId);
+    formData.append('quantity', quantity);
+
+    const response = await fetch('/ShoppingCart/AddToCart', {
+        method: 'POST',
+        headers: { 'RequestVerificationToken': antiForgeryToken() },
+        body: formData
     });
 
-    // Removes the product from the page instead of reloading the entire page
-    document.getElementById(`row-${productId}`).remove();
+    if (!response.ok) {
+        const text = await response.text();
+        showCartMessage(text && text.length < 200 ? text : 'Kunne ikke legge varen i handlekurven.', true);
+        return;
+    }
 
-    const tbody = document.querySelector('#shopping-cart tbody');
-    if (!tbody || tbody.rows.length === 0) {
-        // If there is no items left, reload the entire page
-        window.location.reload();
+    if (quantityElement) quantityElement.value = 1;
+    showCartMessage('Lagt i handlekurven', false);
+    if (typeof refreshCartCount === 'function') refreshCartCount();
+}
+
+// Updates the price figures on one cart row from the unit prices stored on the row
+function updateLine(productId, quantity) {
+    const row = document.querySelector(`[data-line="${productId}"]`);
+    if (!row) return;
+
+    const set = (selector, unit) => {
+        const el = row.querySelector(selector);
+        if (el && unit) el.textContent = money(parseFloat(unit) * quantity);
+    };
+    set('.line-total-inc', row.dataset.unit);
+    set('.line-old-inc', row.dataset.old);
+    set('.line-total-ex', row.dataset.unitEx);
+    set('.line-old-ex', row.dataset.oldEx);
+}
+
+async function sendQuantity(productId, url, method) {
+    const response = await fetch(url, { method, headers: { 'RequestVerificationToken': antiForgeryToken() } });
+    if (!response.ok) {
+        const text = await response.text();
+        showCartMessage(text && text.length < 200 ? text : 'Kunne ikke endre antall.', true);
+        return null;
+    }
+    return response;
+}
+
+async function AddQuantity(productId) {
+    const input = document.getElementById(`quantity-${productId}`);
+    if (!input) return;
+
+    const oldQuantity = clampQuantity(input.value);
+    const newQuantity = Math.min(oldQuantity + 1, MAX_QUANTITY);
+    input.value = newQuantity;
+
+    if (document.getElementById('product-page')) return; // product page: only changes the number to add
+
+    updateLine(productId, newQuantity);
+    const ok = await sendQuantity(productId, `/ShoppingCart/AddQuantity/?id=${productId}`, 'PATCH');
+    if (!ok) { input.value = oldQuantity; updateLine(productId, oldQuantity); }
+    await Summary();
+}
+
+async function DecreaseQuantity(productId) {
+    const input = document.getElementById(`quantity-${productId}`);
+    if (!input) return;
+
+    const oldQuantity = clampQuantity(input.value);
+    const newQuantity = Math.max(oldQuantity - 1, 1);
+    input.value = newQuantity;
+
+    if (document.getElementById('product-page')) return;
+    if (newQuantity === oldQuantity) return;
+
+    updateLine(productId, newQuantity);
+    const ok = await sendQuantity(productId, `/ShoppingCart/DecreaseQuantity/?id=${productId}`, 'PATCH');
+    if (!ok) { input.value = oldQuantity; updateLine(productId, oldQuantity); }
+    await Summary();
+}
+
+async function UpdateQuantity(productId) {
+    const input = document.getElementById(`quantity-${productId}`);
+    if (!input) return;
+
+    const newQuantity = clampQuantity(input.value);
+    input.value = newQuantity;
+    updateLine(productId, newQuantity);
+
+    const response = await sendQuantity(productId, `/ShoppingCart/SetQuantity/?id=${productId}&quantity=${newQuantity}`, 'PATCH');
+    if (response) {
+        const data = await response.json();
+        input.value = data.correctedQuantity;
+        updateLine(productId, data.correctedQuantity);
     }
     await Summary();
 }
 
-async function AddToCart(productId){
-    const quantityElement = document.getElementById(`quantity-${productId}`);
-    const quantity = quantityElement ? parseInt(quantityElement.value, 10) || 1:1;
-    
-    // Saves antiforgerytoken to protect against CSRF-attacks
-    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-
-    const formData = new FormData();
-    formData.append("id", productId);
-    formData.append("quantity", quantity);
-    
-    // Fetch the delete function from the controller
-   //const response = await fetch(`/ShoppingCart/AddToCart/?id=${productId}&quantity=${quantity}`, {
-    const response = await fetch("/ShoppingCart/AddToCart", {
-        method: 'POST',
-        headers: {
-            'RequestVerificationToken': token
-        },
-        body: formData
-    });
-
-    // Prints the error message if bad request is returned, and keeps it there for 3 seconds
-    if (!response.ok) {
-        const msg = await response.text();
-        document.getElementById("error-box").innerText = msg;
-        setTimeout(() => document.getElementById("error-box").innerText = "", 3000);
-    } else {
-        if (!isAuthenticated) {
-            const currentUrl = window.location.pathname + window.location.search;
-            window.location.href =`/identity/account/login?returnUrl=${encodeURIComponent(currentUrl)}`;
-            return;
-        }
-        /*
-        const popup = document.getElementById("cart-popup");
-        popup.style.display = "block";
-        document.getElementById("go-to-cart").onclick = () => {
-            window.location.href = "/checkout";
-        };
-        document.getElementById("continue-shopping").onclick = () => {
-            popup.style.display = "none";
-        }; */
-        window.location.reload();
-    }
-}
-
-// Helper that formats numers as norwegian currency (1000 as 1000,00 kr)
-const nok = new Intl.NumberFormat('no-NO', { style: 'currency', currency: 'NOK' });
-
-async function AddQuantity(productId, campaignPrice, regularPrice) {
-    const quantityElement = document.getElementById(`quantity-${productId}`);
-    const totalElement = document.getElementById(`total-${productId}`);
-    const beforeElement = document.getElementById(`before-${productId}`);
-    
-    if(!quantityElement) return; // if element does not exist
-
-    // Save old values in case of rollback, parse to int because we will treat it as a number
-    const oldQuantity = parseInt(quantityElement.value, 10) || 0; // || 0 means if the field is not a number(empty or error) then use 0
-    const oldTotal = totalElement ? totalElement.innerText : '';
-    const oldBefore = beforeElement ? beforeElement.innerText : '';
-
-    // Update quantity
-    const newQuantity = oldQuantity + 1;
-    quantityElement.value = String(newQuantity);
-    
-    // If in shopping cart view, update price
-    if (totalElement) {
-        totalElement.innerText = nok.format(newQuantity * campaignPrice);
-    }
-
-    // Update before element if exists
-    if (beforeElement) {
-        beforeElement.innerText = nok.format(newQuantity * regularPrice);
-    }
-
-    // If on product page, stop here
-    const productPage = document.getElementById(`product-page`);
-    if(productPage) return;
-    
-    // If in shopping cart, send PATCH-request to server
-    // Saves the Anti forgery token
-    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-
-    // Fetch the response in case of error
-    const response = await fetch(`/ShoppingCart/AddQuantity/?id=${productId}`, {
-        method: 'PATCH',
-        headers: { 'RequestVerificationToken': token },
-    });
-
-    // If the response is an error
-    if (!response.ok) {
-        // Rollback to the cart values before the error occured
-        quantityElement.value = String(oldQuantity);
-        if(totalElement) totalElement.innerText = oldTotal;
-        if(beforeElement) beforeElement.innerText = oldBefore;
-
-        // Prints error message
-        const msg = await response.text();
-        document.getElementById("error-box").innerText = msg;
-        setTimeout(() => document.getElementById("error-box").innerText = "", 3000);
-    }
-    else {
-        await Summary();
-    }
-}
-
-async function DecreaseQuantity(productId, campaignPrice, regularPrice) {
-    const quantityElement = document.getElementById(`quantity-${productId}`);
-    const totalElement = document.getElementById(`total-${productId}`);
-    const beforeElement = document.getElementById(`before-${productId}`);
-
-    if(!quantityElement) return; // if element does not exist
-
-    // Save old values in case of rollback, parse to int because we will treat it as a number
-    const oldQuantity = parseInt(quantityElement.value, 10) || 0;
-    const oldTotal = totalElement ? totalElement.innerText : '';
-    const oldBefore = beforeElement ? beforeElement.innerText : '';
-    
-    // Decrease quantity
-    let newQuantity = oldQuantity - 1;
-    
-    // If quatity is 0 or less set to 1
-    if (newQuantity <= 0) newQuantity = 1;
-   
-    // Display new value
-    quantityElement.value = String(newQuantity);
-    
-    // If in shopping cart view, update price
-    if (totalElement) {
-        totalElement.innerText = nok.format(newQuantity * campaignPrice);
-    }
-    // Update before element if exists
-    if (beforeElement) {
-        beforeElement.innerText = nok.format(newQuantity * regularPrice);
-    }
-
-    // If on product page, stop here
-    const productPage = document.getElementById(`product-page`);
-    if(productPage) return;
-
-    // If in shopping cart, send PATCH-request to server
-    // Saves antiforgerytoken to protect against CSRF-attacks
-    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-   
-    const response = await fetch(`/ShoppingCart/DecreaseQuantity/?id=${productId}`, {
-        method: 'PATCH',
-        headers: { 'RequestVerificationToken': token },
-    });
-
-    // Prints the error message if bad request is returned, and keeps it there for 3 seconds
-    if (!response.ok) {
-        if (newQuantity <= 0) {
-            window.location.reload();
-        }
-        else {
-            // Rollback to the cart values before the error occured
-            quantityElement.value = String(oldQuantity);
-            if(totalElement) totalElement.innerText = oldTotal;
-            if(beforeElement) beforeElement.innerText = oldBefore;
-        }
-        
-        // Prints error message
-        const msg = await response.text();
-        document.getElementById("error-box").innerText = msg;
-        setTimeout(() => document.getElementById("error-box").innerText = "", 3000);
-    }
-    else {
-        await Summary();
-    }
-}
-
-
-async function UpdateQuantity(productId, campaignPrice, regularPrice) {
-    const quantityElement = document.getElementById(`quantity-${productId}`);
-    const totalElement = document.getElementById(`total-${productId}`);
-    const beforeElement = document.getElementById(`before-${productId}`);
-    
-    // Parse inputvalue to int
-    let newQuantity = parseInt(quantityElement.value, 10);
-
-    // If the user inputs something other that a number
-    if (isNaN(newQuantity) || newQuantity <= 0) {
-        // Set the value to 1 and update summary
-        newQuantity = 1;
-        quantityElement.value = 1;
-        await Summary();
-    }
-
-    // Update total
-    if (totalElement) {
-        totalElement.innerText = nok.format(newQuantity * campaignPrice);
-    }
-    // Update before element if exists
-    if (beforeElement) {
-        beforeElement.innerText = nok.format(newQuantity * regularPrice);
-    }
-    
-    // Saves antiforgerytoken to protect against CSRF-attacks
-    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
-    
-    // Send the new quantity in to the ShoppingCart controller (SetQuantity action)
-    const response = await fetch(`/ShoppingCart/SetQuantity/?id=${productId}&quantity=${newQuantity}`, {
-        method: 'PATCH',
-        headers: { 'RequestVerificationToken': token },
-    });
-
-    // If an error occours
-    if (!response.ok) {
-        const msg = await response.text();
-        document.getElementById("error-box").innerText = msg;
-        setTimeout(() => document.getElementById("error-box").innerText = "", 3000);
-    } 
-    else {
-        // If the server adjusted the quantity, update it in the input box
-        const data = await response.json();
-        quantityElement.value = data.correctedQuantity;
-        if (totalElement) totalElement.innerText = nok.format(data.correctedQuantity * campaignPrice);
-        if (beforeElement) beforeElement.innerText = nok.format(data.correctedQuantity * regularPrice);
-        
-        await Summary();
-    }
-}
-
 function UpdateQuantityLocal(productId) {
-    const quantityElement = document.getElementById(`quantity-${productId}`);
+    const input = document.getElementById(`quantity-${productId}`);
+    if (input) input.value = clampQuantity(input.value);
+}
 
-    let newQuantity = parseInt(quantityElement.value, 10);
+// Product grid: the +/- next to the Buy button
+function ChangeQty(productId, delta) {
+    const input = document.getElementById(`quantity-${productId}`);
+    if (!input) return;
+    input.value = clampQuantity((parseInt(input.value, 10) || 1) + delta);
+}
 
-    if (isNaN(newQuantity) || newQuantity < 1) {
-        newQuantity = 1;
-        quantityElement.value = 1;
-    }
-} 
+function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
 
+// Fills the summary panel in the checkout from the server's numbers
 async function Summary() {
-    const sumProducts = document.getElementById('sum-products');
-    if (!sumProducts) return; // return if user is on productpage 
-    
+    if (!document.getElementById('sum-total')) return; // not a checkout page
+
     try {
-        // Fetch the data by sending a request to the Summary action in the controller that returns JSON-data
-        const response = await fetch('/Checkout/Summary', {
-            credentials: 'same-origin',
-            cache: 'no-store'
-        });
-
-        // If response was not 200 then throw error and go to catch
+        const response = await fetch('/Checkout/Summary', { credentials: 'same-origin', cache: 'no-store' });
         if (!response.ok) throw new Error();
+        const d = await response.json();
 
-        // Save the JSON-data
-        const data  = await response.json();
+        setText('sum-before', money(d.sumBefore));
+        setText('sum-discount', d.campaignDiscount > 0 ? '−' + money(d.campaignDiscount) : money(0));
+        setText('sum-shipping', d.shippingChosen ? money(d.shipping) : 'Velges i neste steg');
+        setText('sum-total', money(d.total));
+        setText('sum-vat', money(d.vat));
+        setText('sum-exvat', money(d.totalExVat));
 
-        // Update the HTML
-        document.getElementById("sum-products").innerText = nok.format(data.sumProducts);
-        document.getElementById("sum-before").innerText = nok.format(data.sumBefore);
-        document.getElementById('sum-discount').textContent = (data.discount > 0 ? '-' : '') + nok.format(Math.abs(data.discount));  // Show a "-" when it is a discount
-        document.getElementById('sum-shipping').textContent = nok.format(data.shipping);
-        document.getElementById('sum-total').textContent = nok.format(data.total);
-        // Vis rabattkode-prosent i sammendraget
-        if (document.getElementById("sum-code-discount")) {
-            document.getElementById("sum-code-discount").textContent =
-                data.codeDiscountPercent > 0 ? `-${data.codeDiscountPercent}%` : "0%";
+        const badge = document.getElementById('cart-count');
+        if (badge) {
+            badge.innerText = d.itemCount;
+            badge.style.display = d.itemCount > 0 ? 'block' : 'none';
         }
 
-    } catch {// If we get an error show 0,00 kr
-        ['sum-products','sum-before','sum-discount','sum-shipping','sum-total']
-            .forEach(id => document.getElementById(id).textContent = '0,00 kr');
+        const hasCode = d.codePercent > 0;
+        document.getElementById('row-code')?.classList.toggle('d-none', !hasCode);
+        setText('sum-code-label', hasCode ? `Rabattkode ${d.codeName} (${d.codePercent} %)` : 'Rabattkode');
+        setText('sum-code-discount', hasCode ? '−' + money(d.codeDiscount) : '');
+
+        document.getElementById('discount-form')?.classList.toggle('d-none', hasCode);
+        document.getElementById('discount-applied')?.classList.toggle('d-none', !hasCode);
+        setText('discount-applied-text', hasCode ? `${d.codeName}: −${d.codePercent} %` : '');
+    } catch {
+        showCartMessage('Kunne ikke hente sammendraget. Last siden på nytt.', true);
     }
 }
+
+document.addEventListener('DOMContentLoaded', () => { Summary(); });

@@ -1,5 +1,6 @@
 @model ReviewOrderViewModel
 @using VitalHelse.Models.Enums
+@using VitalHelse.Services
 
 @{
     ViewBag.Title = "Betaling";
@@ -15,12 +16,9 @@
 
         @foreach (var item in Model.CartProducts)
         {
-            var unitPrice = item.Product.ProductCampaignPrice ?? item.Product.ProductPriceInVAT;
-            var totalPrice = unitPrice * item.Quantity;
-
             <li class="list-group-item py-3 px-4">
                 <div class="row align-items-center gy-3">
-                    
+
                     <div class="col-3 col-sm-2">
                         <img class="w-75" src="@(item.Product.ProductPictures.FirstOrDefault()?.PicturePath ?? "/images/products/default.png")"
                              alt="@item.Product.ProductName"/>
@@ -31,29 +29,8 @@
                         <div>Antall: @item.Quantity</div>
                     </div>
 
-                    <div class="col text-end">
-                        @if (item.Product.ProductCampaignPrice != null)
-                        {
-                            var beforeTotal = item.Product.ProductPriceInVAT * item.Quantity;
-                            var afterTotal = item.Product.ProductCampaignPrice.Value * item.Quantity;
-
-                            <!-- Total rice without campaign price -->
-                            <div id="before-@item.ProductId" class="text-muted text-decoration-line-through mt-0">
-                                @beforeTotal.ToString("N2") kr <!-- Force razor to use 2 decimals, 299,00 -->
-                            </div>
-
-                            <!-- Total price with campaign price -->
-                            <div id="total-@item.ProductId" class="fw-semibold">
-                                @afterTotal.ToString("N2") kr
-                            </div>
-                        }
-                        else
-                        {
-                            <!-- IKKE PÅ SALG – vis bare ordinær pris × antall -->
-                            <div id="total-@item.ProductId" class="fw-semibold">
-                                @((item.Product.ProductPriceInVAT * item.Quantity).ToString("N2")) kr
-                            </div>
-                        }
+                    <div class="col">
+                        <partial name="_LinePrice" model="(item.Product, item.Quantity)" />
                     </div>
                 </div>
             </li>
@@ -81,7 +58,7 @@
                         </div>
 
                         <div class="col-4 text-start">
-                            <h6> Ordrebekreftelse sendes til @Model.UserAddress.AspNetUsers.Email</h6>
+                            <h6> Ordrebekreftelse sendes til @User.Identity?.Name</h6>
                         </div>
 
                     </div>
@@ -100,12 +77,12 @@
                     <div class="row align-items-center py-2">
                         <div class="col-6">
                             <div class="col-6 d-flex align-items-center">
-                                <h6 class="m-0">@Model.ShippingMethod.MethodName</h6>
+                                <h6 class="m-0">@Model.ShippingMethod?.MethodName</h6>
                             </div>
                         </div>
                         
                         <div class="col-6 d-flex justify-content-end align-items-center">
-                            <h6 class="m-0">@Model.ShippingPrice.ToString("N2") kr</h6>
+                            <h6 class="m-0">@Pricing.Money(Model.ShippingPrice)</h6>
                         </div>
                     </div>
                 </div>

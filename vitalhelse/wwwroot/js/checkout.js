@@ -1,10 +1,10 @@
-// This is your test publishable API key.
-const stripe = Stripe("pk_test_51SChPUC3eESM2GvNExbkerY8b3hhTHtCshe5iLw221DEAWWuLg3uqUS6y3J7gbCLz9VLhUKXpOSB8XigMg6n2RsO00LaXHEigo");
-
 initialize();
 
 // Create a Checkout Session
 async function initialize() {
+    const config = await (await fetch("/create-checkout-session/config")).json();
+    const stripe = Stripe(config.publishableKey);
+
     const fetchClientSecret = async () => {
         const response = await fetch("/create-checkout-session", {
             method: "POST",

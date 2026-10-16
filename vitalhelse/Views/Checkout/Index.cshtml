@@ -1,4 +1,5 @@
 @using VitalHelse.Models.Enums
+@using VitalHelse.Services
 @model List<CartProduct>
 
 @{
@@ -23,7 +24,10 @@ else
     <ul class="list-group">
         @foreach (var item in Model)
         {
-            <li id="row-@item.ProductId" class="list-group-item py-4 px-6">
+            var info = Pricing.Info(item.Product);
+            <li id="row-@item.ProductId" class="list-group-item py-4 px-6" data-line="@item.ProductId"
+                data-unit="@Pricing.Plain(info.Current)" data-old="@Pricing.Plain(info.Original)"
+                data-unit-ex="@Pricing.Plain(Pricing.ExVat(info.Current))" data-old-ex="@Pricing.Plain(Pricing.ExVat(info.Original))">
                 <div  class="row align-items-center gy-3">
 
                     <!-- Product image -->
@@ -41,37 +45,23 @@ else
                     <!-- Quantity -->
                     <div class="col-auto">
                         <div class="input-group change-quantity">
-                            <button onclick="DecreaseQuantity(@item.ProductId, @((item.Product.ProductCampaignPrice ?? item.Product.ProductPriceInVAT).ToString().Replace(',', '.')), @(item.Product.ProductPriceInVAT.ToString().Replace(',', '.')))" class="btn btn-outline-secondary" type="button">&minus;</button>
-                            <input id="quantity-@item.ProductId" class="form-control text-center" style="max-width:60px" value="@item.Quantity" onchange="UpdateQuantity(@item.ProductId, @((item.Product.ProductCampaignPrice ?? item.Product.ProductPriceInVAT).ToString().Replace(',', '.')), @(item.Product.ProductPriceInVAT.ToString().Replace(',', '.')))">
-                            <button onclick="AddQuantity(@item.ProductId, @((item.Product.ProductCampaignPrice ?? item.Product.ProductPriceInVAT).ToString().Replace(',', '.')), @(item.Product.ProductPriceInVAT.ToString().Replace(',', '.')))" class="btn btn-outline-secondary" type="button">+</button>
+                            <button onclick="DecreaseQuantity(@item.ProductId)" class="btn btn-outline-secondary" type="button" aria-label="Færre">&minus;</button>
+                            <input id="quantity-@item.ProductId" class="form-control text-center" style="max-width:60px" value="@item.Quantity" onchange="UpdateQuantity(@item.ProductId)">
+                            <button onclick="AddQuantity(@item.ProductId)" class="btn btn-outline-secondary" type="button" aria-label="Flere">+</button>
                         </div>
-                    </div> 
+                        @if (item.Product.StockCount.HasValue && item.Product.StockCount.Value <= 0)
+                        {
+                            <div class="text-danger small mt-1">Utsolgt – fjern fra handlekurven</div>
+                        }
+                        else if (item.Product.StockCount.HasValue && item.Quantity > item.Product.StockCount.Value)
+                        {
+                            <div class="text-danger small mt-1">Kun @item.Product.StockCount.Value på lager</div>
+                        }
+                    </div>
 
                     <!-- Price -->
-                    <div class="col-auto col-sm-3 col-lg-2 text-end d-flex flex-column align-items-center">
-                        @if (item.Product.ProductCampaignPrice != null)
-                        {
-                            var beforeTotal = item.Product.ProductPriceInVAT * item.Quantity;
-                            var afterTotal = item.Product.ProductCampaignPrice.Value * item.Quantity;
-
-                            <!-- Total rice without campaign price -->
-                            <div id="before-@item.ProductId" class="text-muted text-decoration-line-through mt-0">
-                                @beforeTotal.ToString("N2") kr <!-- Force razor to use 2 decimals, 299,00 -->
-                            </div>
-
-                            <!-- Total price with campaign price -->
-                            <div id="total-@item.ProductId" class="fw-semibold">
-                                @afterTotal.ToString("N2") kr
-                            </div>
-                        }
-                        else
-                        {
-                            <!-- Total regular price -->
-                            <div id="total-@item.ProductId" class="fw-semibold">
-                                @((item.Product.ProductPriceInVAT * item.Quantity).ToString("N2")) kr
-                            </div>
-                        }
-                        
+                    <div class="col-auto col-sm-3 col-lg-2 d-flex flex-column align-items-center">
+                        <partial name="_LinePrice" model="(item.Product, item.Quantity)" />
                     </div>
 
                     <!-- Trash bin icon/Remove button -->
