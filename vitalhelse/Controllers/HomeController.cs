@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VitalHelse.Data;
+using VitalHelse.Helpers;
 using VitalHelse.Models;
 using VitalHelse.ViewModels;
 
@@ -40,6 +41,7 @@ namespace VitalHelse.Controllers
                 .ToListAsync();
 
             var products = await _db.Products
+                .VisibleFor(User)
                 .Include(p => p.ProductPictures)
                 .ToListAsync();
 

@@ -26,6 +26,7 @@ public class ReccomendationsController : Controller
             .ToListAsync();
     
         var recommendations = await _db.Products
+            .VisibleFor(User)
             .Where(p => p.ProductId != productId && 
                         p.ProductCategories.Any(pc => categoryIds.Contains(pc.CategoryId)))
             .Include(p => p.ProductPictures)

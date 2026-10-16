@@ -55,7 +55,7 @@ namespace VitalHelse.Controllers
                 .AsNoTracking()
                 .Include(fp => fp.Product)
                 .ThenInclude(p => p.ProductPictures)
-                .Where(fp => fp.AspNetUsersId == user.Id)
+                .Where(fp => fp.AspNetUsersId == user.Id && (fp.Product.ProductVisibility || User.IsInRole("Admin") || User.IsInRole("Staff")))
                 .Select(fp => fp.Product)
                 .ToListAsync();
 
@@ -130,12 +130,15 @@ namespace VitalHelse.Controllers
             
             var products = await _db.FavoriteProducts
                 .Include(fp => fp.Product)
-                .Where(fp => fp.AspNetUsersId == user.Id)
+                .Where(fp => fp.AspNetUsersId == user.Id && (fp.Product.ProductVisibility || User.IsInRole("Admin") || User.IsInRole("Staff")))
                 .Select(fp => fp.Product)
                 .ToListAsync();
 
             foreach (var p in products)
             {
+                // Sold-out products are skipped
+                if (p.StockCount.HasValue && p.StockCount.Value <= 0) continue;
+
                 // For every product, check if it exists in the shopping cart
                 var shoppingCart = await _db.CartProducts
                     .FirstOrDefaultAsync(c => c.AspNetUsersId == user.Id && c.ProductId == p.ProductId);
@@ -143,7 +146,8 @@ namespace VitalHelse.Controllers
                 // If it exists in the shopping cart, increment quantity by one
                 if (shoppingCart != null)
                 {
-                    shoppingCart.Quantity += 1;
+                    var limit = Math.Min(99, p.StockCount ?? 99);
+                    if (shoppingCart.Quantity < limit) shoppingCart.Quantity += 1;
                     continue;
                 }
                 

@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VitalHelse.Data;
+using VitalHelse.Helpers;
 using VitalHelse.Models;
 
 namespace VitalHelse.Controllers;
@@ -44,6 +45,7 @@ public class SearchController : Controller
         term = term.ToLower();
 
         var suggestions = await _context.Products
+            .VisibleFor(User)
             .Where(p =>
                 (p.ProductName != null && p.ProductName.ToLower().Contains(term)) ||
                 (p.ProductDescription != null && p.ProductDescription.ToLower().Contains(term))
@@ -57,7 +59,7 @@ public class SearchController : Controller
                 description = p.ProductDescription != null && p.ProductDescription.Length > 50
                     ? p.ProductDescription.Substring(0, 50) + "..."
                     : p.ProductDescription,
-                price = p.ProductPriceInVAT
+                price = p.ProductCampaignPrice ?? p.ProductPriceInVAT
             })
             .ToListAsync();
         //Returns the list of suggestions as a JSON object
@@ -87,6 +89,7 @@ public class SearchController : Controller
     
     {
         var productsQuery = _context.Products
+            .VisibleFor(User)
             .Include(p => p.ProductPictures)
             .Include(p => p.ProductCategories).ThenInclude(pc => pc.Category)
             .Include(p => p.ProductTags).ThenInclude(pt => pt.Tag)
@@ -104,10 +107,26 @@ public class SearchController : Controller
                 (p.ProductDescription != null && p.ProductDescription.ToLower().Contains(lowerQuery)));
         }
 
-        // Filter by Category
+        // Filter by Category. A main category also matches the products in its subcategories.
         if (categoryIds != null && categoryIds.Any())
+        {
+            var parentOf = _context.Categories
+                .Select(c => new { c.CategoryId, c.ParentCategoryId })
+                .ToDictionary(c => c.CategoryId, c => c.ParentCategoryId);
+
+            var wanted = new HashSet<int>(categoryIds);
+            bool grew;
+            do
+            {
+                grew = false;
+                foreach (var (id, parent) in parentOf)
+                    if (parent.HasValue && wanted.Contains(parent.Value) && wanted.Add(id))
+                        grew = true;
+            } while (grew);
+
             productsQuery = productsQuery.Where(p =>
-                p.ProductCategories.Any(pc => categoryIds.Contains(pc.CategoryId)));
+                p.ProductCategories.Any(pc => wanted.Contains(pc.CategoryId)));
+        }
 
         // Filter by Tag
         if (tagId.HasValue)
@@ -121,10 +140,10 @@ public class SearchController : Controller
 
         // Filter by Price range
         if (minPrice.HasValue)
-            productsQuery = productsQuery.Where(p => p.ProductPriceInVAT >= minPrice.Value);
+            productsQuery = productsQuery.Where(p => (p.ProductCampaignPrice ?? p.ProductPriceInVAT) >= minPrice.Value);
 
         if (maxPrice.HasValue)
-            productsQuery = productsQuery.Where(p => p.ProductPriceInVAT <= maxPrice.Value);
+            productsQuery = productsQuery.Where(p => (p.ProductCampaignPrice ?? p.ProductPriceInVAT) <= maxPrice.Value);
 
         // Filter by discount
         if (discountOnly == true)
@@ -132,7 +151,7 @@ public class SearchController : Controller
 
         // Filter by availability
         if (inStockOnly == true)
-            productsQuery = productsQuery.Where(p => p.StockCount > 0);
+            productsQuery = productsQuery.Where(p => p.StockCount == null || p.StockCount > 0);
 
         var products = await productsQuery.ToListAsync();
 

@@ -62,6 +62,7 @@ namespace VitalHelse.Controllers;
                 return RedirectToAction("Index", "Home");
 
             var product = _db.Products
+                .VisibleFor(User)
                 .Include(p => p.ProductPictures)
                 .Include(p => p.ProductTags).ThenInclude(pt => pt.Tag)
                 .Include(p => p.ProductCategories)
@@ -104,6 +105,7 @@ namespace VitalHelse.Controllers;
 
             // 🔹 Check if path refers to a product
             var product = _db.Products
+                .VisibleFor(User)
                 .Include(p => p.ProductPictures)
                 .Include(p => p.ProductTags).ThenInclude(pt => pt.Tag)
                 .Include(p => p.ProductCategories)
@@ -143,6 +145,7 @@ namespace VitalHelse.Controllers;
             var allCategoryIds = GetAllCategoryIds(currentCategory);
 
             var products = _db.Products
+                .VisibleFor(User)
                 .Include(p => p.ProductPictures)
                 .Include(p => p.ProductTags).ThenInclude(pt => pt.Tag)
                 .Include(p => p.ProductCategories).ThenInclude(pc => pc.Category)
