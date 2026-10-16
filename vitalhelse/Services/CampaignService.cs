@@ -3,6 +3,11 @@ namespace VitalHelse.Services;
 using Data;
 using Models.Discount;
 
+/// <summary>
+/// Campaign prices are derived data: a product is on sale when it belongs to a category of a campaign that is
+/// switched on and currently inside its date range, and the sale price follows the category's discount rate.
+/// Recalculating everything in one go keeps overlapping campaigns, expiry and price changes consistent.
+/// </summary>
 public class CampaignService
 {
     private readonly ApplicationDbContext _context;
@@ -12,110 +17,73 @@ public class CampaignService
         _context = context;
     }
 
-    // Henter parent + direkte children
-    private List<int> GetAllRelevantCategories(List<int> categoryIds)
+    /// <summary>Switches off campaigns that have ended, then recalculates every product's campaign price.</summary>
+    public void SyncSchedule()
     {
-        var all = new HashSet<int>(categoryIds);
-
-        // Finn direkte children til parent-kategorier
-        var children = _context.Categories
-            .Where(c => c.ParentCategoryId != null &&
-                        categoryIds.Contains(c.ParentCategoryId.Value))
-            .Select(c => c.CategoryId)
-            .ToList();
-
-        foreach (var child in children)
-            all.Add(child);
-
-        return all.ToList();
-    }
-
-    public void ApplyPricing(Campaign c)
-    {
-        if (!c.IsActive) return;
-
-        // Parent + children
-        var relevantCategories = GetAllRelevantCategories(c.CategoryIds);
-
-        // Finn produkter i parent + children
-        var products = _context.ProductCategories
-            .Where(pc => relevantCategories.Contains(pc.CategoryId))
-            .Select(pc => pc.Product)
-            .Distinct()
-            .ToList();
-
-        // Finn rabatter for parent + children
-        var categoryDiscounts = _context.CategoryDiscounts
-            .Where(cd => relevantCategories.Contains(cd.CategoryId))
-            .ToDictionary(cd => cd.CategoryId, cd => cd.DiscountPercent);
-
-        // ARV rabatt ned til children
-        foreach (var parentId in c.CategoryIds)
-        {
-            if (categoryDiscounts.TryGetValue(parentId, out var parentDiscount))
-            {
-                // Finn children til denne parenten
-                var children = _context.Categories
-                    .Where(cat => cat.ParentCategoryId == parentId)
-                    .Select(cat => cat.CategoryId)
-                    .ToList();
-
-                // Arv discount til alle barn
-                foreach (var childId in children)
-                {
-                    if (!categoryDiscounts.ContainsKey(childId))
-                    {
-                        categoryDiscounts[childId] = parentDiscount;
-                    }
-                }
-            }
-        }
-
-
-        foreach (var p in products)
-        {
-            // Finn alle kategorier produktet ligger i
-            var productCategories = _context.ProductCategories
-                .Where(pc => pc.ProductId == p.ProductId)
-                .Select(pc => pc.CategoryId)
-                .ToList();
-
-            decimal discountPercent = 0;
-
-            // Finn høyeste rabatt for produktets kategorier
-            foreach (var catId in productCategories)
-            {
-                if (categoryDiscounts.TryGetValue(catId, out var d))
-                    discountPercent = Math.Max(discountPercent, d);
-            }
-
-            // Sett kampanjepris
-            if (discountPercent > 0 && p.ProductPriceInVAT > 0)
-            {
-                decimal rate = (100m - discountPercent) / 100m;
-                p.ProductCampaignPrice = p.ProductPriceInVAT * rate;
-            }
-            else
-            {
-                p.ProductCampaignPrice = null;
-            }
-        }
+        var now = DateTime.Now;
+        foreach (var expired in _context.Campaigns.Where(c => c.IsActive && c.End < now).ToList())
+            expired.IsActive = false;
 
         _context.SaveChanges();
+        RecalculateAll();
     }
 
-    public void RemovePricing(Campaign c)
-    {
-        var relevantCategories = GetAllRelevantCategories(c.CategoryIds);
+    // Kept so older call sites keep working: any campaign change simply recalculates everything
+    public void ApplyPricing(Campaign c) => RecalculateAll();
+    public void RemovePricing(Campaign c) => RecalculateAll();
 
-        var products = _context.ProductCategories
-            .Where(pc => relevantCategories.Contains(pc.CategoryId))
-            .Select(pc => pc.Product)
-            .Distinct()
+    public void RecalculateAll()
+    {
+        var now = DateTime.Now;
+
+        var running = _context.Campaigns
+            .Where(c => c.IsActive && c.Start <= now && c.End >= now)
             .ToList();
 
-        foreach (var p in products)
-            p.ProductCampaignPrice = null;
+        var parentOf = _context.Categories
+            .Select(c => new { c.CategoryId, c.ParentCategoryId })
+            .ToDictionary(c => c.CategoryId, c => c.ParentCategoryId);
+
+        var rates = _context.CategoryDiscounts.ToDictionary(d => d.CategoryId, d => d.DiscountPercent);
+
+        // The categories chosen in a running campaign, as ancestors-or-self
+        var campaignRoots = running.SelectMany(c => c.CategoryIds).ToHashSet();
+
+        // The discount for a category: its own rate, otherwise the nearest ancestor's. Only categories under a
+        // campaign category count.
+        int RateFor(int categoryId)
+        {
+            var inCampaign = false;
+            var rate = 0;
+            var current = (int?)categoryId;
+            var guard = 0;
+
+            while (current != null && guard++ < 20)
+            {
+                if (campaignRoots.Contains(current.Value)) inCampaign = true;
+                if (rate == 0 && rates.TryGetValue(current.Value, out var r) && r > 0) rate = r;
+                current = parentOf.TryGetValue(current.Value, out var parent) ? parent : null;
+            }
+
+            return inCampaign ? rate : 0;
+        }
+
+        var categoriesByProduct = _context.ProductCategories
+            .Select(pc => new { pc.ProductId, pc.CategoryId })
+            .AsEnumerable()
+            .GroupBy(pc => pc.ProductId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.CategoryId).ToList());
+
+        foreach (var product in _context.Products.ToList())
+        {
+            var best = categoriesByProduct.TryGetValue(product.ProductId, out var categories)
+                ? categories.Select(RateFor).DefaultIfEmpty(0).Max()
+                : 0;
+
+            product.ProductCampaignPrice = best > 0 && product.ProductPriceInVAT > 0
+                ? Pricing.Round(product.ProductPriceInVAT * (100 - best) / 100m)
+                : null;
+        }
 
         _context.SaveChanges();
     }

@@ -18,221 +18,112 @@ public class StripeWebHook : Controller
     private readonly UserManager<AspNetUsers> _userManager;
     private readonly StripeOptions _stripeOptions;
     private readonly EmailService _emailService;
+    private readonly OrderService _orders;
+    private readonly VitalHelse.Services.DiscountService _discounts;
+    private readonly ILogger<StripeWebHook> _logger;
 
-    public StripeWebHook(ApplicationDbContext db, UserManager<AspNetUsers> userManager, IOptions<StripeOptions> stripeOptions, EmailService emailService)
+    public StripeWebHook(ApplicationDbContext db, UserManager<AspNetUsers> userManager, IOptions<StripeOptions> stripeOptions,
+        EmailService emailService, OrderService orders, VitalHelse.Services.DiscountService discounts, ILogger<StripeWebHook> logger)
     {
         _db = db;
         _userManager = userManager;
         _stripeOptions = stripeOptions.Value;
         _emailService = emailService;
+        _orders = orders;
+        _discounts = discounts;
+        _logger = logger;
     }
-        
+
     /// <summary>
-    /// Webhook, only implemented when purchase is completed, may be changed later.
-    /// When purchase is completed, remove all items from the shopping cart and create a new order
+    /// Stripe tells us when a payment has gone through. The order is created from the customer's cart,
+    /// exactly like the demo checkout does, and a receipt is sent.
     /// </summary>
-    /// <returns>A new order</returns>
     [HttpPost]
     public async Task<IActionResult> Index()
     {
-        // Reads the webhook
         var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();
 
         Event stripeEvent;
-
         try
         {
-            // Verify signature, safety against false webhooks
-            stripeEvent = EventUtility.ConstructEvent(
-                json,
-                Request.Headers["Stripe-Signature"],
-                _stripeOptions.WebhookSecret,
-                throwOnApiVersionMismatch: false);
+            // Verify the signature so forged webhooks are rejected
+            stripeEvent = EventUtility.ConstructEvent(json, Request.Headers["Stripe-Signature"],
+                _stripeOptions.WebhookSecret, throwOnApiVersionMismatch: false);
         }
         catch (StripeException e)
         {
-            Console.WriteLine($"Stripe error: {e.Message}");
+            _logger.LogWarning("Stripe webhook rejected: {Message}", e.Message);
             return BadRequest();
         }
-        if (stripeEvent.Type != "payment_intent.succeeded")
+
+        if (stripeEvent.Type != "payment_intent.succeeded" || stripeEvent.Data.Object is not PaymentIntent paymentIntent)
+            return Ok();
+
+        if (!paymentIntent.Metadata.TryGetValue("userId", out var userId))
         {
+            _logger.LogWarning("Payment {Id} has no userId in its metadata", paymentIntent.Id);
             return Ok();
         }
-        
-        // Event when the payment is succeeded
-        if (stripeEvent.Type == "payment_intent.succeeded")
+
+        // Stripe may deliver the same event twice
+        if (await _db.Orders.AnyAsync(o => o.StripePaymentIntentId == paymentIntent.Id))
+            return Ok();
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null) return Ok();
+
+        // The code was already applied in the amount the customer paid, so it is honoured even if it has changed since
+        ActiveDiscount? code = null;
+        if (paymentIntent.Metadata.TryGetValue("discountCode", out var codeName) && !string.IsNullOrWhiteSpace(codeName))
         {
-            var paymentIntent = stripeEvent.Data.Object as PaymentIntent;
-            if (paymentIntent == null)
-                return Ok();
-
-            if (!paymentIntent.Metadata.TryGetValue("userId", out var userId))
-            {
-                Console.WriteLine("Missing userId in payment metadata");
-                return Ok();
-            }
-            
-            var user = await _userManager.FindByIdAsync(userId);
-            
-            var paymentIntentId = paymentIntent.Id;
-
-            // Test to avoid duplicate order in case of network error
-            var existingOrder = await _db.Orders
-                .FirstOrDefaultAsync(o => o.StripePaymentIntentId == paymentIntentId);
-
-            if (existingOrder != null)
-            {
-                Console.WriteLine($"Order already exists for PaymentIntent {paymentIntentId}");
-                return Ok();
-            }
-
-            Console.WriteLine($"Payment succeeded for user {userId}");
-
-            // Get cart
-            var cartItems = await _db.CartProducts
-                .Include(cp => cp.Product)
-                .Where(cp => cp.AspNetUsersId == userId)
-                .ToListAsync();
-
-            //if (!cartItems.Any()) return RedirectToAction("Index");
-
-            decimal beforeDiscount = cartItems.Sum(i => i.Product.ProductPriceInVAT * i.Quantity);
-            decimal productTotal = cartItems.Sum(i => (i.Product.ProductCampaignPrice ?? i.Product.ProductPriceInVAT) * i.Quantity);
-            decimal productDiscount = beforeDiscount - productTotal;
-
-            
-            
-            // Get user address
-            var address = await _db.UserAddresses.FirstOrDefaultAsync(a => a.Id == user.DefaultUserAddressId);
-            // Get user shipping method
-            var method = await _db.ShippingMethods.FirstOrDefaultAsync(s => s.Id == user.DefaultShippingMethodId);
-
-            // Get the thresholds
-            var thresholds = _db.ShippingPriceThresholds
-                .AsEnumerable()
-                .OrderBy(t => t.MinOrderAmount)
-                .ToList();
-
-            // Get correct shipping price based on cart total
-            decimal basePrice = thresholds
-                .Where(t => productTotal >= t.MinOrderAmount)
-                .Select(t => t.ShippingPrice)
-                .DefaultIfEmpty(0)
-                .Last();
-
-            // Calculate the shipping price based on thresholds and method
-            decimal shippingPrice = basePrice * method.RateMultiplier;
-            
-            int percent = HttpContext.Session.GetInt32("DiscountPercent") ?? 0;
-            decimal discountAmount = productTotal * (percent / 100m);
-            decimal total = productTotal - discountAmount + shippingPrice;
-            
-            // Create order
-            var order = new Order
-            {
-                OrderDate = DateTime.Now,
-                Status = "Paid",
-                TotalCost = total,
-                AspNetUsersId = userId,
-
-                DiscountCodeId = percent > 0 ? $"{percent}%" : null,
-                ShippingProvider = method.MethodName,
-                
-                ShippingFirstName = address.FirstName,
-                ShippingLastName = address.LastName,
-                ShippingStreet = address.Street,
-                ShippingPostalCode = address.PostalCode,
-                ShippingCity = address.City,
-                ShippingPhoneNumber = address.PhoneNumber,
-                
-                ShippingMethodName = method.MethodName,
-                ShippingMethodRateMultiplier = method.RateMultiplier,
-                ShippingPrice = shippingPrice
-            };
-
-            _db.Orders.Add(order);
-            await _db.SaveChangesAsync(); 
-            
-            // Add products
-            foreach (var item in cartItems)
-            {
-                _db.OrderProducts.Add(new OrderProduct
-                {
-                    OrderId = order.OrderId,
-                    ProductId = item.ProductId,
-                    Quantity = item.Quantity
-                });
-            }
-
-            await _db.SaveChangesAsync();
-
-            // Clear cart
-            _db.CartProducts.RemoveRange(cartItems);
-            await _db.SaveChangesAsync();
-
-            // Remove discount code after use
-            HttpContext.Session.Remove("DiscountPercent");
-
-            Console.WriteLine($"Created order {order.OrderId} for user {userId}");
-            
-           
-            // Lists for the product of the customer
-            var productListHtml = "";
-            var productListText = "";
-
-            // Adds all products, quantity and their price to the list
-            foreach (var product in cartItems)
-            {
-                productListHtml += $"<li>{product.Product.ProductName} – {product.Quantity} stk – {product.Product.ProductPriceInVAT} kr</li>";
-                productListText += $"{product.Product.ProductName} - {product.Quantity} stk - {product.Product.ProductPriceInVAT} kr\n";
-                
-                // Reduce stock
-                product.Product.StockCount -= product.Quantity;
-                _db.Products.Update(product.Product);
-            }
-            await _db.SaveChangesAsync();
-
-
-            string firstName = user.FirstName;
-            string lastName = user.LastName;
-            string email = user.Email;
-            
-            // Sends email
-            await _emailService.SendEmailAsync(
-                to: email,
-                firstAndLastName: $"{lastName} {firstName}",
-                subject: "Kvittering for kjøp hos Vital Helse",
-                body: 
-                "Takk for at du handlet hos Vital Helse!"+
-                "Ordrenummer: "+ order.OrderId +
-                "Dato: "+ order.OrderDate +
-                "Produkter:\n" + productListText + "\n" +
-                $"Pris: {paymentIntent.Amount / 100m} {paymentIntent.Currency}"+ 
-                $"Frakt: {shippingPrice}"+
-                $"Totalt: {(paymentIntent.Amount / 100m)+shippingPrice} {paymentIntent.Currency}"+
-                "Har du spørsmål? Kontakt oss på VitalHelse@butikk.no eller besøk VitalHelse.no",
-                htmlBody: 
-                "<h1>Takk for at du handlet hos Vital Helse!</h1>\n\n" +
-                $"<p><strong>Ordrenummer:</strong> {order.OrderId}</p>\n" +
-                $"<p><strong>Dato:</strong> {order.OrderDate:dd.MM.yyyy}</p>\n\n" +
-                "<h2>Bestilling</h2>\n" +
-                $"<ul>{productListHtml}</ul>\n" +
-                $"<p><strong>Pris:</strong> {paymentIntent.Amount / 100m} {paymentIntent.Currency.ToUpper()}</p>\n" +
-                $"<p><strong>Frakt:</strong></p> {shippingPrice}\n" +
-                $"<p><strong>Totalt:</strong></p> {(paymentIntent.Amount / 100m)+shippingPrice} {paymentIntent.Currency}\n\n" +
-                "<p><strong>Spor pakken din her:</strong> \n" +
-                "</p>\n\n<p>\n" +
-                "Har du spørsmål? Kontakt oss på \n" +
-                "<a href=\"mailto:VitalHelse@butikk.no\">VitalHelse@butikk.no</a> \n" +
-                "eller besøk \n" +
-                "<a href=\"https://vitalhelse.no\">VitalHelse.no</a>.\n" +
-                "</p>");
+            var entry = await _db.DiscountCodes.FirstOrDefaultAsync(d => d.Code == codeName);
+            if (entry != null) code = new ActiveDiscount(entry.Code, entry.DiscountPercent);
         }
-        else
-        { 
-            Console.WriteLine($"Unhandled event type: {stripeEvent.Type}");
+
+        var result = await _orders.PlaceOrderAsync(user, code, "Betalt", paymentIntent.Id, enforceStock: false);
+        if (result.Order == null)
+        {
+            _logger.LogError("Payment {Id} succeeded but the order could not be created: {Error}", paymentIntent.Id, result.Error);
+            return Ok();
         }
+
+        try
+        {
+            await SendReceiptAsync(user, result);
+        }
+        catch (Exception ex)
+        {
+            // A failed receipt must not make Stripe retry the webhook and create the order again
+            _logger.LogWarning(ex, "Receipt for order {OrderId} could not be sent", result.Order.OrderId);
+        }
+
         return Ok();
     }
-}
 
+    private async Task SendReceiptAsync(AspNetUsers user, PlaceOrderResult result)
+    {
+        var order = result.Order!;
+        var totals = result.Totals!;
+
+        var lines = await _db.OrderProducts
+            .Include(op => op.Product)
+            .Where(op => op.OrderId == order.OrderId)
+            .ToListAsync();
+
+        var text = string.Join("\n", lines.Select(l => $"{l.Product.ProductName} – {l.Quantity} stk – {Pricing.Money(l.UnitPrice)}"));
+        var html = string.Concat(lines.Select(l => $"<li>{l.Product.ProductName} – {l.Quantity} stk – {Pricing.Money(l.UnitPrice)}</li>"));
+        var discountText = totals.CodeDiscount > 0 ? $"Rabattkode {totals.CodeName}: −{Pricing.Money(totals.CodeDiscount)}\n" : "";
+
+        await _emailService.SendEmailAsync(
+            to: user.Email!,
+            firstAndLastName: $"{user.FirstName} {user.LastName}".Trim(),
+            subject: "Kvittering for kjøp hos Vital Helse",
+            body: $"Takk for at du handlet hos Vital Helse!\nOrdrenummer: {order.OrderId}\nDato: {order.OrderDate:dd.MM.yyyy}\n\n{text}\n\n" +
+                  discountText + $"Frakt: {Pricing.Money(totals.Shipping)}\nTotalt: {Pricing.Money(totals.Total)} (herav MVA {Pricing.Money(totals.VatAmount)})",
+            htmlBody: $"<h1>Takk for at du handlet hos Vital Helse!</h1><p><strong>Ordrenummer:</strong> {order.OrderId}</p>" +
+                      $"<p><strong>Dato:</strong> {order.OrderDate:dd.MM.yyyy}</p><h2>Bestilling</h2><ul>{html}</ul>" +
+                      (totals.CodeDiscount > 0 ? $"<p>Rabattkode {totals.CodeName}: −{Pricing.Money(totals.CodeDiscount)}</p>" : "") +
+                      $"<p><strong>Frakt:</strong> {Pricing.Money(totals.Shipping)}</p>" +
+                      $"<p><strong>Totalt:</strong> {Pricing.Money(totals.Total)} (herav MVA {Pricing.Money(totals.VatAmount)})</p>");
+    }
+}

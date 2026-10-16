@@ -45,31 +45,40 @@ public class ShoppingCartController : Controller
         return NoContent();
     }
 
+    private const int MaxQuantity = 99;
+
+    private string? CurrentUserId => User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+    // Checks a wanted quantity against the allowed range and the stock. Returns an error message, or null when fine.
+    private static string? QuantityProblem(Product product, int quantity)
+    {
+        if (quantity < 1)
+            return "Antall må være minst 1.";
+        if (quantity > MaxQuantity)
+            return $"Du kan maks bestille {MaxQuantity} stk av samme vare.";
+        if (product.StockCount.HasValue && quantity > Math.Max(0, product.StockCount.Value))
+        {
+            var left = Math.Max(0, product.StockCount.Value);
+            return left == 0
+                ? $"{product.ProductName} er dessverre utsolgt."
+                : $"Vi har bare {left} stk av {product.ProductName} på lager.";
+        }
+        return null;
+    }
+
     [HttpPatch]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddQuantity(int id)
     {
-        // Fetch the user id
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var item = await _db.CartProducts.Include(c => c.Product)
+            .FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == CurrentUserId);
+        if (item == null) return NotFound("Varen finnes ikke i handlekurven.");
 
-        // Finds the row in CartProducts where Product and userId match 
-        var shoppingCart = await _db.CartProducts
-            .Include(c => c.Product)
-            .FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == userId);
+        var problem = QuantityProblem(item.Product, item.Quantity + 1);
+        if (problem != null) return BadRequest(problem);
 
-        if (shoppingCart != null)
-        {
-            /*
-            if (shoppingCart.Quantity >= shoppingCart.Product.StockCount)
-            {
-                // Returns a 400 bad request if the quantity equals the amount of stock
-                return BadRequest("Vi har desverre ikke dette antaller tilgjengelig på lager");
-            }*/
-
-            // Adds quantity by 1 and save it
-            shoppingCart.Quantity += 1;
-            await _db.SaveChangesAsync();
-        }
+        item.Quantity += 1;
+        await _db.SaveChangesAsync();
         return NoContent();
     }
 
@@ -77,123 +86,65 @@ public class ShoppingCartController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DecreaseQuantity(int id)
     {
-        // Fetch the user id
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var item = await _db.CartProducts.FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == CurrentUserId);
+        if (item == null) return NotFound("Varen finnes ikke i handlekurven.");
 
-        // Finds the row in CartProducts where Product and userId match
-        var shoppingCart = await _db.CartProducts.FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == userId);
-
-        // If quantity is 1 or less
-        if (shoppingCart.Quantity <= 1) {
-            return NoContent();  
+        if (item.Quantity > 1)
+        {
+            item.Quantity -= 1;
+            await _db.SaveChangesAsync();
         }
-
-        // Decrease the quantity by one
-        shoppingCart.Quantity -= 1;
-        await _db.SaveChangesAsync();
-        
         return NoContent();
     }
-    
+
     [HttpPatch]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetQuantity(int id, int quantity)
     {
-        // Fetch the user id
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var item = await _db.CartProducts.Include(c => c.Product)
+            .FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == CurrentUserId);
+        if (item == null) return NotFound("Varen finnes ikke i handlekurven.");
 
-        // Finds the row in CartProducts where Product and userId match
-        var shoppingCart = await _db.CartProducts
-            .Include(c => c.Product)
-            .FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == userId);
+        var problem = QuantityProblem(item.Product, quantity);
+        if (problem != null)
+        {
+            // Too many for the stock: fall back to what is available instead of failing
+            var stock = item.Product.StockCount;
+            if (quantity > 1 && stock.HasValue && stock.Value >= 1 && quantity > stock.Value && stock.Value <= MaxQuantity)
+                quantity = stock.Value;
+            else
+                return BadRequest(problem);
+        }
 
-        // If cart item doesnt exist
-        if (shoppingCart == null)
-            return NotFound();
-        
-        // If quantity is less than zero or zero
-        if (quantity <= 0)
-            return BadRequest("Antall må være minst 1.");
-        
-        // If stock is NULL (not set) then use 0
-        var stock = shoppingCart.Product.StockCount ?? 0;
-        
-        // If quantity is more than stock then set quantity to stock 
-        /*if (quantity > stock)
-            quantity = stock;*/
-
-        // If quantity is more than stock then set quantity to stock 
-        /*
-        if (quantity > shoppingCart.Product.StockCount.GetValueOrDefault())
-            quantity = shoppingCart.Product.StockCount.GetValueOrDefault();
-        */
-        
-        // Update the quantity 
-        shoppingCart.Quantity = quantity;
+        item.Quantity = quantity;
         await _db.SaveChangesAsync();
-        
-        // Return a JSON object with the adjusted quantity
-        return Json(new { correctedQuantity = quantity }); 
+        return Json(new { correctedQuantity = quantity });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    //[Authorize]
     public async Task<IActionResult> AddToCart(int id, int quantity)
     {
-        // Fetch the user id
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var userId = CurrentUserId;
+        if (userId == null) return Unauthorized();
 
-        // Search for a matching row in the shoppingcart
-        var shoppingCart = await _db.CartProducts
-            .FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == userId);
+        var product = await _db.Products.FirstOrDefaultAsync(m => m.ProductId == id && (m.ProductVisibility || User.IsInRole("Admin") || User.IsInRole("Staff")));
+        if (product == null) return NotFound("Produktet finnes ikke.");
 
-        // Gets the productId, so that we can match the cart quantity with stock count
-        var product = await _db.Products
-            .FirstOrDefaultAsync(m => m.ProductId == id);
+        if (quantity < 1 || quantity > MaxQuantity)
+            return BadRequest(QuantityProblem(product, quantity) ?? "Ugyldig antall.");
 
-        if (product == null) return NoContent();
+        var item = await _db.CartProducts.FirstOrDefaultAsync(m => m.ProductId == id && m.AspNetUsersId == userId);
 
-        // The stock count has to be higher than 0 to add the item to cart.
-        //if (product.StockCount <= 0) return NoContent();
-        
-        // If the item already exists in the shoppingcart increment the quantity.
-        if (shoppingCart != null)
-        { 
-            var newQuantity = shoppingCart.Quantity + quantity;
-            /*
-            if (newQuantity >= product.StockCount)
-            {
-                return BadRequest("Vi har desverre ikke dette antallet tilgjengelig på lager");
-            } 
-            */
-            shoppingCart.Quantity = newQuantity;
+        var problem = QuantityProblem(product, (item?.Quantity ?? 0) + quantity);
+        if (problem != null) return BadRequest(problem);
 
-           // shoppingCart.Quantity += 1; 
-        }
-
-        // If not. Create a new row and add the item
+        if (item != null)
+            item.Quantity += quantity;
         else
-        {
-            /*
-            if (quantity > product.StockCount)
-                return BadRequest("Vi har desverre ikke dette antallet tilgjengelig på lager");
-            */
-            
-            // Creates a new row
-            CartProduct cartProduct = new CartProduct
-            {
-                Quantity = quantity,
-                //Quantity = 1,
-                AspNetUsersId = userId,
-                ProductId = id
-            };
+            _db.CartProducts.Add(new CartProduct { Quantity = quantity, AspNetUsersId = userId, ProductId = id });
 
-            _db.Add(cartProduct);
-        }
         await _db.SaveChangesAsync();
-        
-        // Dont change the view
         return NoContent();
     }
 }

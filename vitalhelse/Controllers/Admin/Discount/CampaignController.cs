@@ -8,6 +8,7 @@ using Services;
 
 
 [Authorize(Roles = "Admin,Staff")]
+[AutoValidateAntiforgeryToken]
 public class CampaignController : Controller
 {
     private readonly ApplicationDbContext _context;
@@ -53,9 +54,15 @@ public class CampaignController : Controller
     [HttpPost("Admin/Campaign/Create")]
     public IActionResult Create(string Name, DateTime Start, DateTime End, List<int> CategoryIds)
     {
+        if (string.IsNullOrWhiteSpace(Name) || End < Start || !(CategoryIds?.Any() ?? false))
+        {
+            TempData["Error"] = "Kampanjen trenger navn, minst én kategori og en sluttdato etter startdato.";
+            return RedirectToAction("Index");
+        }
+
         var camp = new Campaign
         {
-            Name = Name,
+            Name = Name.Trim(),
             Start = Start,
             End = End,
             CategoryIds = CategoryIds ?? new List<int>(),
@@ -65,8 +72,8 @@ public class CampaignController : Controller
         _context.Campaigns.Add(camp);
         _context.SaveChanges();
 
-        // Apply pricing via service
-        _campaignService.ApplyPricing(camp);
+        // Prices follow the campaign's dates, so a campaign that starts later does not discount anything yet
+        _campaignService.RecalculateAll();
 
         return RedirectToAction("Index");
     }
@@ -84,10 +91,7 @@ public class CampaignController : Controller
         c.IsActive = !c.IsActive;
         _context.SaveChanges();
 
-        if (c.IsActive)
-            _campaignService.ApplyPricing(c);
-        else
-            _campaignService.RemovePricing(c);
+        _campaignService.RecalculateAll();
 
         return RedirectToAction("Index");
     }
@@ -102,10 +106,10 @@ public class CampaignController : Controller
         var camp = _context.Campaigns.Find(id);
         if (camp == null) return NotFound();
 
-        _campaignService.RemovePricing(camp);
-
         _context.Campaigns.Remove(camp);
         _context.SaveChanges();
+
+        _campaignService.RecalculateAll();
 
         return RedirectToAction("Index");
     }

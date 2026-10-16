@@ -7,6 +7,7 @@ using Services;
 
 
 [Authorize(Roles = "Admin,Staff")]
+[AutoValidateAntiforgeryToken]
 public class CategoryDiscountController : Controller
 {
     private readonly ApplicationDbContext _context;
@@ -49,8 +50,9 @@ public class CategoryDiscountController : Controller
     [HttpPost("Admin/CategoryDiscounts/SaveAll")]
     public IActionResult SaveAll(List<CategoryDiscountViewModel> model)
     {
-        foreach (var item in model)
+        foreach (var item in model ?? new List<CategoryDiscountViewModel>())
         {
+            if (item.DiscountPercent < 0 || item.DiscountPercent > 100) continue;
             var existing = _context.CategoryDiscounts
                 .FirstOrDefault(cd => cd.CategoryId == item.CategoryId);
 
@@ -68,17 +70,11 @@ public class CategoryDiscountController : Controller
             }
         }
 
-        // Oppdater ALLE aktive kampanjer sine produktpriser
-        var activeCampaigns = _context.Campaigns
-            .Where(c => c.IsActive && c.Start <= DateTime.Now && c.End >= DateTime.Now)
-            .ToList();
-
-        foreach (var camp in activeCampaigns)
-        {
-            _campaignService.ApplyPricing(camp);
-        }
-
         _context.SaveChanges();
+
+        // New rates change the sale prices of every running campaign
+        _campaignService.RecalculateAll();
+
         return RedirectToAction("Index");
     }
 

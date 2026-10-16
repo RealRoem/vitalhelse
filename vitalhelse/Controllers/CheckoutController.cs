@@ -16,15 +16,21 @@ public class CheckoutController : Controller
     private readonly ApplicationDbContext _db;
     private readonly UserManager<AspNetUsers> _userManager;
     private readonly DiscountService _discountService;
+    private readonly CartPricingService _pricing;
+    private readonly OrderService _orders;
 
     public CheckoutController(
         ApplicationDbContext db,
         UserManager<AspNetUsers> userManager,
-        DiscountService discountService)
+        DiscountService discountService,
+        CartPricingService pricing,
+        OrderService orders)
     {
         _db = db;
         _userManager = userManager;
         _discountService = discountService;
+        _pricing = pricing;
+        _orders = orders;
     }
     
     // Helper function to check if cart is empty
@@ -52,66 +58,26 @@ public class CheckoutController : Controller
     [HttpGet]
     public async Task<IActionResult> Summary()
     {
-        // Fetch the user
         var user = await _userManager.GetUserAsync(User);
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        
-        // Get all the items in the cart
-        var items = await _db.CartProducts
-            .Include(cp => cp.Product)
-            .Where(cp => cp.AspNetUsersId == userId)
-            .ToListAsync();
+        if (user == null) return Unauthorized();
 
-        // If cart is empty
-        if (!items.Any())
-        {
-            return Json(new { sumProducts = 0, sumBefore = 0, discount = 0, shipping = 0, total = 0, codeDiscountPercent = 0 });
-        }
+        var items = await _pricing.GetCartAsync(user.Id);
+        var t = _pricing.Calculate(items, user.DefaultShippingMethodId, items.Count == 0 ? null : _discountService.GetActive());
 
-        // Calculate totals
-        decimal sumBefore = items.Sum(i => i.Product.ProductPriceInVAT * i.Quantity);
-        decimal sumProducts = items.Sum(i => (i.Product.ProductCampaignPrice ?? i.Product.ProductPriceInVAT) * i.Quantity);
-        decimal productDiscount = sumBefore - sumProducts;
-        decimal shipping = 0;
-        decimal cartTotal = sumProducts;
-
-        // Get the thresholds
-        var thresholds = _db.ShippingPriceThresholds
-            .AsEnumerable()
-            .OrderBy(t => t.MinOrderAmount)
-            .ToList();
-        
-        // Get correct shipping price based on cart total
-        decimal basePrice = thresholds
-            .Where(t => cartTotal >= t.MinOrderAmount)
-            .Select(t => t.ShippingPrice)
-            .DefaultIfEmpty(0)
-            .Last();
-
-        // Calculate the shipping price based on thresholds and method
-        if (user.DefaultShippingMethodId != null) {
-            var method = await _db.ShippingMethods
-                .FirstOrDefaultAsync(m => m.Id == user.DefaultShippingMethodId);
-
-            if (method != null) {
-                shipping = basePrice * method.RateMultiplier;
-            }
-        }
-        
-        int codePercent = HttpContext.Session.GetInt32("DiscountPercent") ?? 0;
-        decimal codeDiscount = sumProducts * (codePercent / 100m);
-        decimal total = sumProducts - codeDiscount + shipping;
-        
-        // Return JSON that will be used by javascript to display all the prices
         return Json(new
         {
-            sumProducts,
-            sumBefore,
-            discount = productDiscount,
-            codeDiscountAmount = codeDiscount, 
-            codeDiscountPercent = codePercent,
-            shipping,
-            total
+            sumBefore = t.SumBefore,
+            campaignDiscount = t.CampaignDiscount,
+            sumProducts = t.SumProducts,
+            codeName = t.CodeName,
+            codePercent = t.CodePercent,
+            codeDiscount = t.CodeDiscount,
+            shipping = t.Shipping,
+            shippingChosen = t.ShippingMethod != null,
+            total = t.Total,
+            vat = t.VatAmount,
+            totalExVat = t.TotalExVat,
+            itemCount = items.Sum(i => i.Quantity)
         });
     }
     
@@ -172,35 +138,36 @@ public class CheckoutController : Controller
         var user = await _userManager.GetUserAsync(User);
         if (user == null) return Unauthorized();
 
-        // Store the chosen address as default address
+        // Only the user's own addresses can be chosen
+        if (!await _db.UserAddresses.AnyAsync(a => a.Id == addressId && a.AspNetUserId == user.Id))
+            return NotFound();
+
         user.DefaultUserAddressId = addressId;
         await _userManager.UpdateAsync(user);
 
         return Ok();
     }
-    
+
     // Function that sets the selected address and goes to next step
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SelectAddress(int? selectedAddressId)
     {
         var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
 
-        // If no address is chosen return error
-        if (selectedAddressId == null)
+        if (selectedAddressId == null
+            || !await _db.UserAddresses.AnyAsync(a => a.Id == selectedAddressId && a.AspNetUserId == user.Id))
         {
             TempData["Error"] = "Du må velge en adresse for å gå videre.";
             return RedirectToAction("Address");
         }
 
-        // Store the chosen address as default address
         user.DefaultUserAddressId = selectedAddressId.Value;
         await _userManager.UpdateAsync(user);
 
-        // Go to next step
         return RedirectToAction("Shipping");
     }
-
     // Function for adding an address
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -279,19 +246,24 @@ public class CheckoutController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteAddress(int id)
     {
-        // Fetch the user id
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
 
-        var address = await _db.UserAddresses.FirstOrDefaultAsync(a => a.Id == id && a.AspNetUserId == userId);
-
+        var address = await _db.UserAddresses.FirstOrDefaultAsync(a => a.Id == id && a.AspNetUserId == user.Id);
         if (address == null) return NotFound();
 
         _db.UserAddresses.Remove(address);
         await _db.SaveChangesAsync();
 
-        return Ok(); 
+        // Do not leave the default address pointing at a row that no longer exists
+        if (user.DefaultUserAddressId == id)
+        {
+            user.DefaultUserAddressId = null;
+            await _userManager.UpdateAsync(user);
+        }
+
+        return Ok();
     }
-    
     // Function for displaying shipping methods
     [HttpGet]
     public async Task<IActionResult> Shipping()
@@ -355,34 +327,41 @@ public class CheckoutController : Controller
         var user = await _userManager.GetUserAsync(User);
         if (user == null) return Unauthorized();
 
+        if (!await _db.ShippingMethods.AnyAsync(m => m.Id == methodId))
+            return NotFound();
+
         user.DefaultShippingMethodId = methodId;
         await _userManager.UpdateAsync(user);
 
         return Ok();
     }
-    
+
     // Function that sets the selected shipping method and goes to next step
     [HttpPost]
     public async Task<IActionResult> SelectShippingMethod(ShippingViewModel vm)
     {
         var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
 
-        if (!vm.SelectedMethodId.HasValue)
+        if (!vm.SelectedMethodId.HasValue || !await _db.ShippingMethods.AnyAsync(m => m.Id == vm.SelectedMethodId.Value))
+        {
+            TempData["Error"] = "Du må velge en leveringsmetode for å gå videre.";
             return RedirectToAction("Shipping");
+        }
 
         user.DefaultShippingMethodId = vm.SelectedMethodId.Value;
         await _userManager.UpdateAsync(user);
 
         return RedirectToAction("ReviewOrder");
     }
-
-    // Function for displaying the whlole order
+    // Function for displaying the whole order
     [HttpGet]
     public async Task<IActionResult> ReviewOrder()
     {
         ViewBag.Step = CheckoutStep.ReviewOrder;
-        
+
         var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
 
         if (await CartIsEmpty())
         {
@@ -401,168 +380,60 @@ public class CheckoutController : Controller
             TempData["Error"] = "Du må velge en leveringsmetode.";
             return RedirectToAction("Shipping");
         }
-        
-        var userId = user?.Id;
-        if (userId == null) return RedirectToAction("Index");
 
-        // Get the cart
-        var cartItems = await _db.CartProducts
-            .Include(cp => cp.Product)
-            .Include(cp => cp.Product.ProductPictures)
-            .Where(cp => cp.AspNetUsersId == userId)
-            .ToListAsync();
+        var cartItems = await _pricing.GetCartAsync(user.Id);
 
-        // Get user address
         var address = await _db.UserAddresses
-            .Include(a => a.AspNetUsers)
-            .FirstOrDefaultAsync(a => a.Id == user.DefaultUserAddressId);
-        
-        ShippingMethod? shippingMethod = null;
-        decimal shippingPrice = 0;
-
-        if (user.DefaultShippingMethodId != null)
+            .FirstOrDefaultAsync(a => a.Id == user.DefaultUserAddressId && a.AspNetUserId == user.Id);
+        if (address == null)
         {
-            // Get user shipping method
-            shippingMethod = await _db.ShippingMethods
-                .FirstOrDefaultAsync(m => m.Id == user.DefaultShippingMethodId);
-
-            if (shippingMethod != null)
-            {
-                // Calculate cart total
-                decimal productTotal = cartItems.Sum(i => (i.Product.ProductCampaignPrice ?? i.Product.ProductPriceInVAT) * i.Quantity);
-                
-                // Get the thresholds
-                var thresholds = _db.ShippingPriceThresholds
-                    .AsEnumerable()
-                    .OrderBy(t => t.MinOrderAmount)
-                    .ToList();
-
-                // Get correct shipping price based on cart total
-                decimal basePrice = thresholds
-                    .Where(t => productTotal >= t.MinOrderAmount)
-                    .Select(t => t.ShippingPrice)
-                    .DefaultIfEmpty(0)
-                    .Last();
-
-                // Calculate the shipping price based on thresholds and method
-                shippingPrice = basePrice * shippingMethod.RateMultiplier;
-            }
+            TempData["Error"] = "Du må velge en adresse først.";
+            return RedirectToAction("Address");
         }
 
-        // Create a viewmodel
+        var totals = _pricing.Calculate(cartItems, user.DefaultShippingMethodId, _discountService.GetActive());
+
         var vm = new ReviewOrderViewModel
         {
             CartProducts = cartItems,
-            UserAddress = address ?? new UserAddress(),
-            ShippingMethod = shippingMethod,
-            ShippingPrice = shippingPrice
+            UserAddress = address,
+            ShippingMethod = totals.ShippingMethod,
+            ShippingPrice = totals.Shipping
         };
 
         return View(vm);
     }
-
-
-    // LIM ALT SOM STÅR I DENNE FUNKSJONEN INN I DIN BETALINGSFUNKSJON TORMOD
+    // Places the order. In demo mode (no Stripe keys) this is the final step of the checkout.
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateOrder()
     {
         var user = await _userManager.GetUserAsync(User);
-        var userId = user?.Id;
+        if (user == null) return Unauthorized();
 
-        if (user == null || userId == null) return Unauthorized();
-        
-        // Get cart
-        var cartItems = await _db.CartProducts
-            .Include(cp => cp.Product)
-            .Where(cp => cp.AspNetUsersId == userId)
-            .ToListAsync();
+        // The discount code is checked again here: it may have been deactivated or expired since it was entered
+        var code = _discountService.GetActive();
 
-        if (!cartItems.Any()) return RedirectToAction("Index");
-
-        decimal beforeDiscount = cartItems.Sum(i => i.Product.ProductPriceInVAT * i.Quantity);
-        decimal productTotal = cartItems.Sum(i => (i.Product.ProductCampaignPrice ?? i.Product.ProductPriceInVAT) * i.Quantity);
-        decimal productDiscount = beforeDiscount - productTotal;
-
-       // Get user address
-        var address = await _db.UserAddresses.FirstOrDefaultAsync(a => a.Id == user.DefaultUserAddressId);
-        if (address == null) return RedirectToAction("Address");
-        
-        // Get user shipping method
-        var method = await _db.ShippingMethods.FirstOrDefaultAsync(s => s.Id == user.DefaultShippingMethodId);
-        if (method == null) return RedirectToAction("Shipping");
-
-        // Get the thresholds
-        var thresholds = _db.ShippingPriceThresholds
-            .AsEnumerable()
-            .OrderBy(t => t.MinOrderAmount)
-            .ToList();
-
-        // Get correct shipping price based on cart total
-        decimal basePrice = thresholds
-            .Where(t => productTotal >= t.MinOrderAmount)
-            .Select(t => t.ShippingPrice)
-            .DefaultIfEmpty(0)
-            .Last();
-
-        // Calculate the shipping price based on thresholds and method
-        decimal shippingPrice = basePrice * method.RateMultiplier;
-        
-        int percent = HttpContext.Session.GetInt32("DiscountPercent") ?? 0;
-        decimal discountAmount = productTotal * (percent / 100m);
-        decimal total = productTotal - discountAmount + shippingPrice;
-
-        // Create order
-        var order = new Order
+        var result = await _orders.PlaceOrderAsync(user, code, "Betalt", null, enforceStock: true);
+        if (result.Order == null)
         {
-            OrderDate = DateTime.Now,
-            Status = "Paid",
-            TotalCost = total,
-            AspNetUsersId = userId,
-
-            DiscountCodeId = percent > 0 ? $"{percent}%" : null,
-            ShippingProvider = method.MethodName,
-            
-            ShippingFirstName = address.FirstName,
-            ShippingLastName = address.LastName,
-            ShippingStreet = address.Street,
-            ShippingPostalCode = address.PostalCode,
-            ShippingCity = address.City,
-            ShippingPhoneNumber = address.PhoneNumber,
-            
-            ShippingMethodName = method.MethodName,
-            ShippingMethodRateMultiplier = method.RateMultiplier,
-            ShippingPrice = shippingPrice
-        };
-
-        _db.Orders.Add(order);
-        await _db.SaveChangesAsync(); 
-        
-        // Add products
-        foreach (var item in cartItems)
-        {
-            _db.OrderProducts.Add(new OrderProduct
-            {
-                OrderId = order.OrderId,
-                ProductId = item.ProductId,
-                Quantity = item.Quantity
-            });
+            TempData["Error"] = result.Error;
+            return RedirectToAction(await CartIsEmpty() ? "Index" : "ReviewOrder");
         }
 
-        await _db.SaveChangesAsync();
-
-        // Clear cart
-        _db.CartProducts.RemoveRange(cartItems);
-        await _db.SaveChangesAsync();
-
-        // Remove discount code after use
-        HttpContext.Session.Remove("DiscountPercent");
-
+        _discountService.Clear();
+        TempData["OrderId"] = result.Order.OrderId;
         return RedirectToAction("Complete");
     }
 
-    public async Task<IActionResult> Complete(){
-        _discountService.RegisterUsage();
+    public IActionResult Complete()
+    {
+        // Only reachable straight after placing an order
+        if (TempData["OrderId"] == null)
+            return RedirectToAction("Index", "Home");
+
         ViewBag.Step = CheckoutStep.Complete;
+        TempData.Keep("OrderId");
         return View();
     }
     

@@ -7,6 +7,7 @@ using VitalHelse.Services;
 namespace VitalHelse.Controllers.Admin.Discount;
 
 [Authorize(Roles = "Admin,Staff")]
+[AutoValidateAntiforgeryToken]
 public class DiscountCodeController : Controller
 {
     private readonly ApplicationDbContext _context;
@@ -32,11 +33,25 @@ public class DiscountCodeController : Controller
     [HttpPost("Admin/DiscountCode/Create")]
     public IActionResult Create(string Code, int DiscountPercent, DateTime? ExpiresAt)
     {
+        Code = (Code ?? "").Trim();
+        if (Code.Length == 0 || DiscountPercent < 1 || DiscountPercent > 100)
+        {
+            TempData["Error"] = "Koden må ha et navn og en rabatt mellom 1 og 100 %.";
+            return RedirectToAction("Index");
+        }
+
+        if (_context.DiscountCodes.Any(d => d.Code.ToLower() == Code.ToLower()))
+        {
+            TempData["Error"] = $"Rabattkoden {Code} finnes allerede.";
+            return RedirectToAction("Index");
+        }
+
         var newCode = new DiscountCode
         {
             Code = Code,
             DiscountPercent = DiscountPercent,
-            ExpiresAt = ExpiresAt,
+            // The form gives local time; codes are compared in UTC
+            ExpiresAt = ExpiresAt?.ToUniversalTime(),
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -70,32 +85,4 @@ public class DiscountCodeController : Controller
 
         return RedirectToAction("Index");
     }
-
-    [HttpPost]
-    public IActionResult ValidateDiscountCode(string code)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-            return Json(new { success = false, message = "Ugyldig kode." });
-
-        var now = DateTime.UtcNow;
-
-        var discount = _context.DiscountCodes
-            .FirstOrDefault(d =>
-                d.Code.ToLower() == code.ToLower() &&
-                d.IsActive &&
-                (d.ExpiresAt == null || d.ExpiresAt > now));
-
-        if (discount == null)
-            return Json(new { success = false, message = "Rabattkoden finnes ikke eller er utløpt." });
-
-        _discountService.SetDiscountCode(discount.Code, discount.DiscountPercent);
-
-        return Json(new
-        {
-            success = true,
-            percent = discount.DiscountPercent,
-            message = $"Rabattkode brukt! -{discount.DiscountPercent}%"
-        });
-    }
-
 }

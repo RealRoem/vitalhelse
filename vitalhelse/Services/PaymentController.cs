@@ -34,151 +34,71 @@ public class PaymentController : Controller
     }
 
     /// <summary>
-    /// Creates a checkout session for the logged-in user.
-    /// Takes the products and quantities from the shopping cart,
-    /// checks their prices, and includes them in the checkout.
+    /// Returns the publishable key so the front end does not need a hardcoded one.
     /// </summary>
+    [HttpGet("config")]
+    public IActionResult Config() => Json(new { publishableKey = _stripeOptions.Value.PublishableKey });
 
-    /// <returns> A checkout page</returns>
+    /// <summary>
+    /// Creates a checkout session for the logged-in user from the cart, using the same totals the customer has seen.
+    /// </summary>
+    /// <returns>The client secret the embedded Stripe checkout needs</returns>
     [HttpPost]
-    public async Task<IActionResult> CreateCheckoutSession()
+    public async Task<IActionResult> CreateCheckoutSession(
+        [FromServices] CartPricingService pricing, [FromServices] VitalHelse.Services.DiscountService discounts)
     {
-        // Finds the user id of the user creating the checkout session
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(userId))
-            return Unauthorized();
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
 
-        // Fetch all the items from the cart
-        var cartItems = await _db.CartProducts
-            .Include(cp => cp.Product)
-            .Where(cp => cp.AspNetUsersId == userId)
-            .ToListAsync();
+        var cart = await pricing.GetCartAsync(user.Id);
+        if (cart.Count == 0) return BadRequest("Handlekurven er tom.");
+        if (user.DefaultShippingMethodId == null) return BadRequest("Leveringsmetode mangler.");
 
-        var productService = new ProductService();
-        var priceService = new PriceService();
-        var lineItems = new List<SessionLineItemOptions>();
+        var code = discounts.GetActive();
+        var totals = pricing.Calculate(cart, user.DefaultShippingMethodId, code);
 
-        // For every item in the cart
-        foreach (var item in cartItems)
+        var lineItems = cart.Select(item => new SessionLineItemOptions
         {
-            var product = item.Product;
-
-            // If the product doesn't exist on the owners stripe account, create a new one
-            if (string.IsNullOrEmpty(product.StripeProductId))
+            Quantity = item.Quantity,
+            PriceData = new SessionLineItemPriceDataOptions
             {
-                var stripeProduct = await productService.CreateAsync(new ProductCreateOptions
-                {
-                    Name = product.ProductName
-                });
-                product.StripeProductId = stripeProduct.Id;
+                Currency = "nok",
+                // The discount code is taken off each unit price here, as Stripe cannot discount only part of an order
+                UnitAmount = (long)Math.Round(Pricing.Effective(item.Product) * (100 - (code?.Percent ?? 0))),
+                ProductData = new SessionLineItemPriceDataProductDataOptions { Name = item.Product.ProductName }
             }
+        }).ToList();
 
-            // Determine the correct price (campaign price if available)
-            var effectivePrice = product.ProductCampaignPrice ?? product.ProductPriceInVAT;
-            var newUnitAmount = (long)(effectivePrice * 100);
-
-            bool needNewPrice = true;
-
-            // If a Stripe price exists, check if it matches current price
-            if (!string.IsNullOrEmpty(product.StripePriceId))
-            {
-                var existingPrice = await priceService.GetAsync(product.StripePriceId);
-
-                // If the price is correct, we can reuse it
-                if (existingPrice.UnitAmount == newUnitAmount)
-                {
-                    needNewPrice = false;
-                }
-            }
-
-            // If no price exists or the price has changed → create a new Stripe Price
-            if (needNewPrice)
-            {
-                var stripePrice = await priceService.CreateAsync(new PriceCreateOptions
-                {
-                    UnitAmount = newUnitAmount,
-                    Currency = "nok",
-                    Product = product.StripeProductId
-                });
-
-                product.StripePriceId = stripePrice.Id;
-            }
-
-            
-            lineItems.Add(new SessionLineItemOptions
-            {
-                Quantity = item.Quantity,
-                Price = product.StripePriceId
-            });
-        }
-
-        await _db.SaveChangesAsync();
-        
-        var user = await _userManager.FindByIdAsync(userId);
-        //if (!cartItems.Any()) return RedirectToAction("Index");
-        var method = await _db.ShippingMethods.FirstOrDefaultAsync(s => s.Id == user.DefaultShippingMethodId);
-        decimal beforeDiscount = cartItems.Sum(i => i.Product.ProductPriceInVAT * i.Quantity);
-        decimal productTotal = cartItems.Sum(i => (i.Product.ProductCampaignPrice ?? i.Product.ProductPriceInVAT) * i.Quantity);
-        decimal productDiscount = beforeDiscount - productTotal;
-        
-        // Get the thresholds
-        var thresholds = _db.ShippingPriceThresholds
-            .AsEnumerable()
-            .OrderBy(t => t.MinOrderAmount)
-            .ToList();
-
-        // Get correct shipping price based on cart total
-        decimal basePrice = thresholds
-            .Where(t => productTotal >= t.MinOrderAmount)
-            .Select(t => t.ShippingPrice)
-            .DefaultIfEmpty(0)
-            .Last();
-
-        // Calculate the shipping price based on thresholds and method
-        var shippingPrice = basePrice * method.RateMultiplier;
-        
-        // Convert to smallest currency unit (øre)
-        var shippingPriceMinor = (long)Math.Round(shippingPrice * 100);
-        
         lineItems.Add(new SessionLineItemOptions
         {
             Quantity = 1,
             PriceData = new SessionLineItemPriceDataOptions
             {
-                UnitAmount = shippingPriceMinor,
                 Currency = "nok",
-                ProductData = new SessionLineItemPriceDataProductDataOptions
-                {
-                    Name = "Shipping"
-                }
+                UnitAmount = (long)Math.Round(totals.Shipping * 100),
+                ProductData = new SessionLineItemPriceDataProductDataOptions { Name = "Frakt" }
             }
         });
 
-        // Creates checkout details
         var host = $"{Request.Scheme}://{Request.Host}";
         var options = new SessionCreateOptions
         {
-            // Makes the checkout embedded to our website
             UiMode = "embedded",
             Mode = "payment",
             LineItems = lineItems,
             ReturnUrl = host + "/return.html?session_id={CHECKOUT_SESSION_ID}",
-            
-            // Saves the userId for the webhook later
             PaymentIntentData = new SessionPaymentIntentDataOptions
             {
+                // The webhook has no browser session, so what it needs travels with the payment
                 Metadata = new Dictionary<string, string>
                 {
-                    { "userId", userId }
+                    { "userId", user.Id },
+                    { "discountCode", code?.Code ?? "" }
                 }
             }
         };
 
-        var service = new SessionService();
-        
-        // Create the session with the given details (options)
-        Session session = service.Create(options);
-
+        var session = await new SessionService().CreateAsync(options);
         return Json(new { clientSecret = session.ClientSecret });
     }
 }
