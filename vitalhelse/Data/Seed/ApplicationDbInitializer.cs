@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using VitalHelse.Models;
 
@@ -6,52 +6,47 @@ namespace VitalHelse.Data;
 
 public static class ApplicationDbInitializer
 {
-    public static async Task InitializeAsync(ApplicationDbContext db, UserManager<AspNetUsers> um, RoleManager<IdentityRole> rm)
+    public static async Task InitializeAsync(ApplicationDbContext db, UserManager<AspNetUsers> um, RoleManager<IdentityRole> rm, bool reset)
     {
-        // Apply any pending migrations (safe for production)
-        //await db.Database.MigrateAsync();
-        
-        db.Database.EnsureDeleted();
-        db.Database.EnsureCreated();
+        if (reset)
+            await db.Database.EnsureDeletedAsync();
 
-        // Ensure roles exist
+        await db.Database.EnsureCreatedAsync();
+
+        // A database left over from an older version of the model has a different schema: rebuild it.
+        try
+        {
+            await db.Products.AnyAsync();
+            await db.Users.AnyAsync();
+        }
+        catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            Console.WriteLine("Existing database does not match the current model, recreating it.");
+            await db.Database.EnsureDeletedAsync();
+            await db.Database.EnsureCreatedAsync();
+        }
+
         foreach (var role in new[] { "Admin", "Staff", "BusinessCustomer" })
         {
             if (!await rm.RoleExistsAsync(role))
                 await rm.CreateAsync(new IdentityRole(role));
         }
 
-        // Admin user
-        if (await um.FindByEmailAsync("admin@vitalhelse.no") == null)
-        {
-            var adminUser = new AspNetUsers { UserName = "admin@vitalhelse.no", Email = "admin@vitalhelse.no", EmailConfirmed = true };
-            await um.CreateAsync(adminUser, "Password1.");
-            await um.AddToRoleAsync(adminUser, "Admin");
-        }
+        await EnsureUser(um, "admin@vitalhelse.no", "Admin");
+        await EnsureUser(um, "staff@vitalhelse.no", "Staff");
+        await EnsureUser(um, "business@vitalhelse.no", "BusinessCustomer", orgNr: "123456789");
+        await EnsureUser(um, "customer@vitalhelse.no", null);
+    }
 
-        // Staff user
-        if (await um.FindByEmailAsync("staff@vitalhelse.no") == null)
-        {
-            var staffUser = new AspNetUsers { UserName = "staff@vitalhelse.no", Email = "staff@vitalhelse.no", EmailConfirmed = true };
-            await um.CreateAsync(staffUser, "Password1.");
-            await um.AddToRoleAsync(staffUser, "Staff");
-        }
+    private static async Task EnsureUser(UserManager<AspNetUsers> um, string email, string? role, string? orgNr = null)
+    {
+        if (await um.FindByEmailAsync(email) != null) return;
 
-        // Business user
-        if (await um.FindByEmailAsync("business@vitalhelse.no") == null)
-        {
-            var businessUser = new AspNetUsers { UserName = "business@vitalhelse.no", Email = "business@vitalhelse.no", EmailConfirmed = true, OrgNr = "123456789"};
-            await um.CreateAsync(businessUser, "Password1.");
-            await um.AddToRoleAsync(businessUser, "BusinessCustomer");
-        }
-
-        // Private customer user
-        if (await um.FindByEmailAsync("customer@vitalhelse.no") == null)
-        {
-            var customerUser = new AspNetUsers { UserName = "customer@vitalhelse.no", Email = "customer@vitalhelse.no", EmailConfirmed = true };
-            await um.CreateAsync(customerUser, "Password1.");
-        }
-
-        await db.SaveChangesAsync();
+        var user = new AspNetUsers { UserName = email, Email = email, EmailConfirmed = true, OrgNr = orgNr };
+        var result = await um.CreateAsync(user, "Password1.");
+        if (!result.Succeeded)
+            throw new InvalidOperationException($"Could not seed {email}: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+        if (role != null)
+            await um.AddToRoleAsync(user, role);
     }
 }

@@ -1,12 +1,12 @@
-﻿using VitalHelse.Models;
+using Microsoft.EntityFrameworkCore;
+using VitalHelse.Models;
 using VitalHelse.Models.Shipping;
 
 namespace VitalHelse.Data;
 
 /// <summary>
 /// Provides test and demo data for the VitalHelse application.
-/// This class should only be executed in Development environments
-/// to prevent accidental seeding of test data into production.
+/// Seeding is controlled by the "Demo:SeedData" setting and only runs when the database has no categories.
 /// </summary>
 public static class TestData
 {
@@ -14,20 +14,18 @@ public static class TestData
     /// Initializes the database with categories and products if empty.
     /// </summary>
     /// <param name="db">Database context for the application.</param>
-    /// <param name="env">Environment context (used to prevent execution in production).</param>
-    public static void Initialize(ApplicationDbContext db, IWebHostEnvironment env)
+    public static void Initialize(ApplicationDbContext db)
     {
-        if (!env.IsDevelopment())
-            return; // Prevent accidental seeding in production
-
-        db.Database.EnsureCreated();
-
         if (!db.Categories.Any())
         {
             SeedCategories(db);
             SeedProducts(db);
             SeedShipping(db);
         }
+
+        // Products are hidden until approved (Tripletex sync creates them hidden); the demo catalogue is all approved
+        if (db.Products.Any() && !db.Products.Any(p => p.ProductVisibility))
+            db.Products.ExecuteUpdate(p => p.SetProperty(x => x.ProductVisibility, true));
     }
 
 
@@ -115,202 +113,6 @@ public static class TestData
         db.SaveChanges();
     }
     
-        /*public static void SeedProducts(ApplicationDbContext db)
-    {
-        if (db.Products.Any()) return;
-
-        // Hent nødvendige kategorier
-        var hudAnsikt     = db.Categories.First(c => c.CategoryName == "ansikt");
-        var hudHender     = db.Categories.First(c => c.CategoryName == "hender");
-        var hudFøtter     = db.Categories.First(c => c.CategoryName == "føtter");
-        var hudKropp      = db.Categories.First(c => c.CategoryName == "kropp");
-
-        var aloeHud       = db.Categories.First(c => c.CategoryName == "hudpleie" && c.ParentCategory.CategoryName == "aloe-vera");
-        var aloeSport     = db.Categories.First(c => c.CategoryName == "sport");
-        var aloeMassasje  = db.Categories.First(c => c.CategoryName == "massasje" && c.ParentCategory.CategoryName == "aloe-vera");
-
-        var hygHånd       = db.Categories.First(c => c.CategoryName == "desinfeksjon");
-        var massOlje      = db.Categories.First(c => c.CategoryName == "massasjeolje");
-        var massMuskel    = db.Categories.First(c => c.CategoryName == "muskelpleie");
-
-        // ==============================
-        // 🌿 PRODUKTOVERSIKT
-        // ==============================
-        var produkter = new List<Product>
-        {
-            new()
-            {
-                ProductName = "Hyaluronic Acid Day Cream 50 ml",
-                ProductPriceInVAT = 299,
-                ProductPriceExVAT = 200,
-                StockCount = -40,
-                ProductCampaignPrice = 200,
-                ProductDescription = "Lett og fuktighetsgivende dagkrem som gir huden glød og mykhet.",
-                LabelDescription = "Fuktighetskrem – Ansikt",
-                ProductPictures = { new() { PicturePath = "/images/products/Hyaluronic Acid Day Cream 50 ml.png" }, new(){ PicturePath = "/images/products/Hyaluronic Acid Night Cream 50 ml.png" } },
-                ProductCategories = { new() { Category = hudAnsikt } }
-            },
-            new()
-            {
-                ProductName = "Hyaluronic Acid Night Cream 50 ml",
-                ProductPriceInVAT = 329,
-                ProductPriceExVAT = 200,
-                StockCount = 35,
-                ProductDescription = "Rik nattkrem som fukter i dybden og reduserer tørrhetslinjer mens du sover.",
-                LabelDescription = "Nattkrem – Ansikt",
-                ProductPictures = { new() { PicturePath = "/images/products/Hyaluronic Acid Night Cream 50 ml.png" } },
-                ProductCategories = { new() { Category = hudAnsikt } }
-            },
-            new()
-            {
-                ProductName = "AloeV Hyaluronic Acid Night Cream 50 ml",
-                ProductPriceInVAT = 339,
-                ProductPriceExVAT = 200,
-                StockCount = 25,
-                ProductDescription = "Nattkrem med Aloe Vera og hyaluronsyre – roer huden og gir dyp fuktighet.",
-                LabelDescription = "Aloe Vera – Hudpleie",
-                ProductPictures = { new() { PicturePath = "/images/products/AloeV Hyaluronic Acid Night Cream 50 ml.avif" } },
-                ProductCategories = { new() { Category = aloeHud } }
-            },
-            new()
-            {
-                ProductName = "Victory Face Cream 50 ml",
-                ProductPriceInVAT = 259,
-                ProductPriceExVAT = 200,
-                StockCount = 60,
-                ProductDescription = "Allsidig ansiktskrem for normal til tørr hud – gir næring og mykhet.",
-                LabelDescription = "Daglig pleie – Ansikt",
-                ProductPictures = { new() { PicturePath = "/images/products/Victory Face Cream 50 ml.png" } },
-                ProductCategories = { new() { Category = hudAnsikt } }
-            },
-            new()
-            {
-                ProductName = "Hand & Foot Creme Extreme 100 gr",
-                ProductPriceInVAT = 229,
-                ProductPriceExVAT = 200,
-                StockCount = 45,
-                ProductDescription = "Intensiv krem for ru og tørre hender og føtter – mykgjør og beskytter.",
-                LabelDescription = "Ekstra rik – Hender/Føtter",
-                ProductPictures = { new() { PicturePath = "/images/products/Hand & Foot Creme Extreme, 100 gr.png" } },
-                ProductCategories = { new() { Category = hudHender } },
-                ProductVisibility = true
-            },
-            new()
-            {
-                ProductName = "Foot Cream 75 ml",
-                ProductPriceInVAT = 199,
-                ProductPriceExVAT = 200,
-                StockCount = 70,
-                ProductDescription = "Pleier og frisker opp slitne føtter – trekker raskt inn.",
-                LabelDescription = "Fotpleie",
-                ProductPictures = { new() { PicturePath = "/images/products/footcream.png" } },
-                ProductCategories = { new() { Category = hudFøtter } }
-            },
-            new()
-            {
-                ProductName = "ColdFace Kuldekrem 50 ml",
-                ProductPriceInVAT = 279,
-                ProductPriceExVAT = 200,
-                StockCount = 30,
-                ProductDescription = "Beskyttende kuldekrem som motvirker tørr hud i kaldt klima.",
-                LabelDescription = "Beskyttende – Kuldekrem",
-                ProductPictures = { new() { PicturePath = "/images/products/coldcream.avif" } },
-                ProductCategories = { new() { Category = hudKropp } }
-            },
-            new()
-            {
-                ProductName = "Victory Active Muscle 120 ml",
-                ProductPriceInVAT = 189,
-                ProductPriceExVAT = 200,
-                StockCount = 55,
-                ProductDescription = "Kjølende muskelkrem for restitusjon og lindring etter fysisk aktivitet.",
-                LabelDescription = "Kjølende – Muskelpleie",
-                ProductPictures = { new() { PicturePath = "/images/products/Victory Active Muscle, 120 ml.png" } },
-                ProductCategories = { new() { Category = massMuskel } }
-            },
-            new()
-            {
-                ProductName = "Victory Aloe Vera Sport Extreme 120 ml",
-                ProductPriceInVAT = 219,
-                ProductPriceExVAT = 200,
-                StockCount = 50,
-                ProductDescription = "Sterk kjølende sportskrem med Aloe Vera og mentol for økt sirkulasjon.",
-                LabelDescription = "Sport – Aloe Vera",
-                ProductPictures = { new() { PicturePath = "/images/products/Victory Aloe Vera Sport Extreme 120 ml.png" } },
-                ProductCategories = { new() { Category = aloeSport } }
-            },
-            new()
-            {
-                ProductName = "Victory Aloe Vera Strong Hot 120 ml",
-                ProductPriceInVAT = 219,
-                ProductPriceExVAT = 200,
-                StockCount = 40,
-                ProductDescription = "Varmende Aloe Vera-krem for lindring av stive og ømme muskler.",
-                LabelDescription = "Varmende – Aloe Vera",
-                ProductPictures = { new() { PicturePath = "/images/products/Victory Aloe Vera Strong Hot, 120 m.png" } },
-                ProductCategories = { new() { Category = aloeSport } }
-            },
-            new()
-            {
-                ProductName = "Victory Therapeutic Massage 250 ml",
-                ProductPriceInVAT = 249,
-                ProductPriceExVAT = 200,
-                StockCount = 30,
-                ProductDescription = "Massasjekrem med behagelig tekstur – ideell for velvære og terapi.",
-                LabelDescription = "Massasje – Terapi",
-                ProductPictures = { new() { PicturePath = "/images/products/Victory Therapeutic Massage, 250 ml.png" } },
-                ProductCategories = { new() { Category = massOlje } }
-            },
-            new()
-            {
-                ProductName = "EmuMedica EmuCream 120 ml",
-                ProductPriceInVAT = 249,
-                ProductPriceExVAT = 200,
-                StockCount = 45,
-                ProductDescription = "Multifunksjonell krem med Emu-olje som roer ned sensitiv hud.",
-                LabelDescription = "Hudpleie – Kropp",
-                ProductPictures = { new() { PicturePath = "/images/products/EmuMedica EmuCream, 120 ml.png" } },
-                ProductCategories = { new() { Category = hudKropp } }
-            },
-            new()
-            {
-                ProductName = "HeatMed AloeV Cold 125 ml",
-                ProductPriceInVAT = 239,
-                ProductPriceExVAT = 200,
-                StockCount = 30,
-                ProductDescription = "Kjølende Aloe Vera-gel som lindrer overanstrengte muskler og ledd.",
-                LabelDescription = "Aloe Vera – Massasje",
-                ProductPictures = { new() { PicturePath = "/images/products/HeatMed AloeV Cold, 125 ml.png" } },
-                ProductCategories = { new() { Category = aloeMassasje } }
-            },
-            new()
-            {
-                ProductName = "Crystal Clean Desinfiserende Håndgel 5L",
-                ProductPriceInVAT = 399,
-                ProductPriceExVAT = 200,
-                StockCount = 20,
-                ProductDescription = "Effektiv hånddesinfeksjon for profesjonell bruk – 70% alkohol.",
-                LabelDescription = "Desinfeksjon – Hender",
-                ProductPictures = { new() { PicturePath = "/images/products/Crystal Clean Desinfiserende Håndgel 5 liter.avif" } },
-                ProductCategories = { new() { Category = hygHånd } }
-            },
-            new()
-            {
-                ProductName = "Eco-Bac 85% Håndsprit 1L",
-                ProductPriceInVAT = 199,
-                ProductPriceExVAT = 200,
-                StockCount = 40,
-                ProductDescription = "Håndsprit med 85% alkohol – effektiv og mild mot huden.",
-                LabelDescription = "Desinfeksjon – Hender",
-                ProductPictures = { new() { PicturePath = "/images/products/Eco-Bac 85% Håndsprit 1 liter.avif" } },
-                ProductCategories = { new() { Category = hygHånd } }
-            }
-        };
-
-        db.Products.AddRange(produkter);
-        db.SaveChanges();
-    }*/
-
     private static void SeedShipping(ApplicationDbContext db)
     {
         var shippingPriceThresholds = new List<ShippingPriceThreshold>
@@ -1695,8 +1497,7 @@ new()
     ProductName = "AloeBoost Ultra Cool 150 ml",
     ProductPriceInVAT = 199,
     ProductPriceExVAT = 199 * 0.8m,
-    StockCount = -12,
-    ProductCampaignPrice = 149,
+    StockCount = 3,
     ProductDescription = "Ekstra kjølende Aloe Vera-gel for rask lindring av varme og irritasjoner.",
     LabelDescription = "Aloe Vera – Kjølende",
     ProductPictures = { new() { PicturePath = "/images/products/42.avif" } },
@@ -1712,7 +1513,6 @@ new()
     ProductPriceInVAT = 229,
     ProductPriceExVAT = 229 * 0.8m,
     StockCount = 33,
-    ProductCampaignPrice = 189,
     ProductDescription = "Varmende gel for dype muskelspenninger og økt sirkulasjon.",
     LabelDescription = "Muskelpleie – Varme",
     ProductPictures = { new() { PicturePath = "/images/products/42.avif" } },
@@ -1742,8 +1542,7 @@ new()
     ProductName = "CrystalClean Rapid Wipes 60 stk",
     ProductPriceInVAT = 79,
     ProductPriceExVAT = 79 * 0.8m,
-    StockCount = -5,
-    ProductCampaignPrice = 59,
+    StockCount = 5,
     ProductDescription = "Praktiske våtservietter for rask rengjøring av hender og overflater.",
     LabelDescription = "Hygiene – Rengjøring",
     ProductPictures = { new() { PicturePath = "/images/products/43.avif" } },
@@ -1773,8 +1572,7 @@ new()
     ProductName = "GentleTouch Intensive Repair 200 ml",
     ProductPriceInVAT = 189,
     ProductPriceExVAT = 189 * 0.8m,
-    StockCount = -8,
-    ProductCampaignPrice = 139,
+    StockCount = 8,
     ProductDescription = "Intensiv reparasjonskrem som gjenoppretter tørr og skadet hud.",
     LabelDescription = "Hudpleie – Reparerende",
     ProductPictures = { new() { PicturePath = "/images/products/44.avif" } },
@@ -1805,7 +1603,6 @@ new()
     ProductPriceInVAT = 249,
     ProductPriceExVAT = 249 * 0.8m,
     StockCount = 29,
-    ProductCampaignPrice = 199,
     ProductDescription = "Beroligende krem for sensitiv hud som trenger ekstra pleie.",
     LabelDescription = "Aloe Vera – Beroligende",
     ProductPictures = { new() { PicturePath = "/images/products/45.avif" } },
@@ -1835,8 +1632,7 @@ new()
     ProductName = "HeatPro Warming Oil 200 ml",
     ProductPriceInVAT = 259,
     ProductPriceExVAT = 259 * 0.8m,
-    StockCount = -3,
-    ProductCampaignPrice = 209,
+    StockCount = 3,
     ProductDescription = "Massasjeolje med varmeeffekt for profesjonell bruk.",
     LabelDescription = "Massasje – Varme",
     ProductPictures = { new() { PicturePath = "/images/products/46.avif" } },
@@ -1866,8 +1662,7 @@ new()
     ProductName = "EcoHands Antibac Spray 300 ml",
     ProductPriceInVAT = 99,
     ProductPriceExVAT = 99 * 0.8m,
-    StockCount = -10,
-    ProductCampaignPrice = 69,
+    StockCount = 1,
     ProductDescription = "Antibac-spray som sørger for rask desinfeksjon av hender og berøringsflater.",
     LabelDescription = "Hygiene – Spray",
     ProductPictures = { new() { PicturePath = "/images/products/47.avif" } },
@@ -1898,7 +1693,6 @@ new()
     ProductPriceInVAT = 189,
     ProductPriceExVAT = 189 * 0.8m,
     StockCount = 32,
-    ProductCampaignPrice = 149,
     ProductDescription = "Gel som styrker hudbarrieren og gir rask lindring.",
     LabelDescription = "Aloe Vera – Barrierepleie",
     ProductPictures = { new() { PicturePath = "/images/products/48.avif" } },
@@ -1928,8 +1722,7 @@ new()
     ProductName = "MuscleZen Heat Therapy 120 ml",
     ProductPriceInVAT = 219,
     ProductPriceExVAT = 219 * 0.8m,
-    StockCount = -7,
-    ProductCampaignPrice = 169,
+    StockCount = 7,
     ProductDescription = "Varmende gel for muskelstivhet og tretthet, perfekt for trening.",
     LabelDescription = "Muskelpleie – Varmende",
     ProductPictures = { new() { PicturePath = "/images/products/49.avif" } },
@@ -1960,7 +1753,6 @@ new()
     ProductPriceInVAT = 199,
     ProductPriceExVAT = 199 * 0.8m,
     StockCount = 48,
-    ProductCampaignPrice = 159,
     ProductDescription = "Reparerende nattkrem som jobber aktivt med hudens gjenoppbygging.",
     LabelDescription = "Ansikt – Nattpleie",
     ProductPictures = { new() { PicturePath = "/images/products/50.avif" } },
@@ -1990,8 +1782,7 @@ new()
     ProductName = "EcoFresh Antibac Gel 150 ml",
     ProductPriceInVAT = 99,
     ProductPriceExVAT = 99 * 0.8m,
-    StockCount = -15,
-    ProductCampaignPrice = 69,
+    StockCount = 6,
     ProductDescription = "Alkoholsbasert antibac-gel med rask tørketid og mild duft.",
     LabelDescription = "Hygiene – Antibac",
     ProductPictures = { new() { PicturePath = "/images/products/51.avif" } },
