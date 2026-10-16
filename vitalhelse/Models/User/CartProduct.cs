@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using Azure.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace VitalHelse.Models;
