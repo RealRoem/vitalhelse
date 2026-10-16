@@ -33,4 +33,28 @@ public class OrderManagementController : Controller
 
         return View(orders);
     }
+
+    public static readonly string[] Statuses = { "Betalt", "Sendt", "Levert", "Kansellert" };
+
+    [HttpPost("Admin/Ordre/Oppdater")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateOrder(int orderId, string status, string? trackingNumber)
+    {
+        var order = await _db.Orders.FindAsync(orderId);
+        if (order == null) return NotFound();
+
+        if (!Statuses.Contains(status))
+        {
+            TempData["Error"] = "Ugyldig status.";
+            return RedirectToAction(nameof(Orders));
+        }
+
+        order.Status = status;
+        if (!string.IsNullOrWhiteSpace(trackingNumber))
+            order.TrackingNumber = trackingNumber.Trim();
+
+        await _db.SaveChangesAsync();
+        TempData["Success"] = $"Ordre #{orderId} er oppdatert.";
+        return RedirectToAction(nameof(Orders));
+    }
 }

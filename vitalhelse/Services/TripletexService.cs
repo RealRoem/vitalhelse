@@ -20,6 +20,7 @@ public class TripletexService
         _config = config;
         _client = new HttpClient();
         _client.BaseAddress = new Uri("https://api-test.tripletex.tech/v2/"); // Test environment
+        _client.Timeout = TimeSpan.FromSeconds(10);
     }
 
     /// <summary>

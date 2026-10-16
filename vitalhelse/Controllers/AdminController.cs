@@ -20,8 +20,15 @@ public class AdminController : Controller
     // ============================================
     public IActionResult Dashboard()
     {
-        // TODO: Integrate data from Stripe / Tripletex later
         ViewData["Title"] = "Dashboard";
+
+        var since = DateTime.Now.AddDays(-30);
+        var recentOrders = _db.Orders.Where(o => o.OrderDate >= since).ToList();
+        ViewBag.OrdersLast30 = recentOrders.Count;
+        ViewBag.RevenueLast30 = recentOrders.Sum(o => o.TotalCost);
+        ViewBag.ProductCount = _db.Products.Count();
+        ViewBag.LowStockCount = _db.Products.Count(p => p.StockCount != null && p.StockCount <= 5);
+        ViewBag.ActiveCampaigns = _db.Campaigns.Count(c => c.IsActive);
         return View();
     }
 

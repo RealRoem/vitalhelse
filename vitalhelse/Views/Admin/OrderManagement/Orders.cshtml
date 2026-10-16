@@ -1,3 +1,5 @@
+@using VitalHelse.Services
+@using VitalHelse.Controllers.Admin.OrderManagement
 @model List<VitalHelse.Models.Order>
 
 @{
@@ -5,61 +7,79 @@
     Layout = "_AdminLayout";
 }
 
-
 <h2 class="mb-4">Alle ordre</h2>
 
-<table class="table table-bordered table-striped">
+@if (!Model.Any())
+{
+    <p class="text-muted">Ingen ordre ennå.</p>
+}
+else
+{
+<table class="table table-bordered table-striped align-middle">
     <thead>
     <tr>
         <th>Ordre #</th>
         <th>Dato</th>
         <th>Kunde</th>
         <th>Adresse</th>
-        <th>Leveringsmetode</th>
-        <th>Totalpris</th>
+        <th>Levering</th>
         <th>Produkter</th>
+        <th>Betaling</th>
+        <th>Status</th>
     </tr>
     </thead>
 
     <tbody>
     @foreach (var o in Model)
     {
+        var vat = Pricing.VatPart(o.TotalCost);
         <tr>
             <td>@o.OrderId</td>
-
             <td>@o.OrderDate?.ToString("dd.MM.yyyy HH:mm")</td>
-
-            <td>
-                @o.AspNetUsers?.Email
-            </td>
-
+            <td>@o.AspNetUsers?.Email</td>
             <td>
                 @o.ShippingFirstName @o.ShippingLastName <br />
                 @o.ShippingStreet <br />
                 @o.ShippingPostalCode @o.ShippingCity <br />
                 @o.ShippingPhoneNumber
             </td>
-
             <td>
                 <strong>@o.ShippingMethodName</strong><br />
-                Pris: @o.ShippingPrice.ToString("0.00") kr
+                @Pricing.Money(o.ShippingPrice)
             </td>
-
             <td>
-                <strong>@o.TotalCost.ToString("0.00") kr</strong>
-            </td>
-
-            <td>
-                <ul>
+                <ul class="mb-0">
                     @foreach (var p in o.OrderProducts)
                     {
-                        <li>
-                            @p.Product.ProductName × @p.Quantity
-                        </li>
+                        <li>@p.Product.ProductName × @p.Quantity <span class="text-muted">(@Pricing.Money(p.UnitPrice))</span></li>
                     }
                 </ul>
+            </td>
+            <td>
+                <strong>@Pricing.Money(o.TotalCost)</strong><br />
+                <small class="text-muted">inkl. MVA @Pricing.Money(vat)</small><br />
+                <small class="text-muted">eks. MVA @Pricing.Money(o.TotalCost - vat)</small>
+                @if (!string.IsNullOrEmpty(o.DiscountCodeId))
+                {
+                    <br /><small class="text-success">Rabattkode: @o.DiscountCodeId</small>
+                }
+            </td>
+            <td style="min-width: 190px;">
+                <form method="post" asp-controller="OrderManagement" asp-action="UpdateOrder" class="d-flex flex-column gap-1">
+                    <input type="hidden" name="orderId" value="@o.OrderId" />
+                    <select name="status" class="form-select form-select-sm">
+                        @foreach (var status in OrderManagementController.Statuses)
+                        {
+                            <option value="@status" selected="@(status == o.Status)">@status</option>
+                        }
+                    </select>
+                    <input type="text" name="trackingNumber" class="form-control form-control-sm" placeholder="Sporingsnummer"
+                           value="@(o.TrackingNumber != null && !o.TrackingNumber.StartsWith("Sporingsnummer sendes") ? o.TrackingNumber : "")" />
+                    <button type="submit" class="btn btn-sm btn-success">Lagre</button>
+                </form>
             </td>
         </tr>
     }
     </tbody>
 </table>
+}

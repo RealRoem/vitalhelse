@@ -88,9 +88,21 @@ ViewData["Title"] = isEditMode ? "Rediger Produkt" : "Legg til Produkt";
 
 
     <div class="form-group mb-3">
-        <label asp-for="Product.ProductCampaignPrice" class="form-label">Kampanje Pris</label>
-        <input asp-for="Product.ProductCampaignPrice" class="form-control"/>
-        <span asp-validation-for="Product.ProductCampaignPrice" class="text-danger"></span>
+        <label class="form-label">Kampanjepris</label>
+        <input type="text" class="form-control" disabled
+               value="@(Model.Product.ProductCampaignPrice.HasValue ? VitalHelse.Services.Pricing.Money(Model.Product.ProductCampaignPrice.Value) : "Ingen aktiv kampanje")" />
+        <div class="form-text">Settes automatisk av kampanjer og rabattsatser. Eks. MVA regnes ut fra prisen.</div>
+    </div>
+
+    <div class="form-group mb-3">
+        <label asp-for="Product.LabelDescription" class="form-label">Kort merkelapp</label>
+        <input asp-for="Product.LabelDescription" class="form-control" maxlength="30"/>
+        <span asp-validation-for="Product.LabelDescription" class="text-danger"></span>
+    </div>
+
+    <div class="form-check mb-3">
+        <input asp-for="Product.ProductVisibility" class="form-check-input" />
+        <label asp-for="Product.ProductVisibility" class="form-check-label">Synlig i butikken</label>
     </div>
 
     <div class="form-group mb-3">

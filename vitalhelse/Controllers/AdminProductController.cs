@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using VitalHelse.Data;
 using VitalHelse.Helpers;
 using VitalHelse.Models;
+using VitalHelse.Services;
 
 namespace VitalHelse.Controllers;
 
@@ -14,12 +15,27 @@ public class AdminProductController :Controller
     private readonly ApplicationDbContext _db;
     private readonly ILogger<ProductController> _logger;
     private readonly UserManager<AspNetUsers> _um;
+    private readonly IWebHostEnvironment _env;
+    private readonly CampaignService _campaigns;
 
-    public AdminProductController(ApplicationDbContext db, ILogger<ProductController> logger, UserManager<AspNetUsers> um)
+    public AdminProductController(ApplicationDbContext db, ILogger<ProductController> logger, UserManager<AspNetUsers> um,
+        IWebHostEnvironment env, CampaignService campaigns)
     {
         _db = db;
         _logger = logger;
         _um = um;
+        _env = env;
+        _campaigns = campaigns;
+    }
+
+    // Product images live under wwwroot/images/products. Anything else is refused (also blocks ../ tricks).
+    private string? ResolveProductImage(string? webPath)
+    {
+        if (string.IsNullOrWhiteSpace(webPath) || !webPath.StartsWith("/images/products/")) return null;
+
+        var root = Path.GetFullPath(Path.Combine(_env.WebRootPath, "images", "products")) + Path.DirectorySeparatorChar;
+        var full = Path.GetFullPath(Path.Combine(_env.WebRootPath, webPath.TrimStart('/')));
+        return full.StartsWith(root, StringComparison.Ordinal) ? full : null;
     }
     
     public IActionResult Details(int? id)
@@ -34,6 +50,7 @@ public class AdminProductController :Controller
     {
         var viewmodel = new ProductFormViewModel
         {
+            Product = new Product { ProductVisibility = true },
             AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList(),
             AllPhysicalAttributes = _db.PhysicalAttributes.OrderBy(p => p.Attribute).ToList(),
             AllTags = _db.Tags.Select(t => t.Tags).ToList()
@@ -63,7 +80,7 @@ public class AdminProductController :Controller
             return Json(new { success = false, error = "File is too large (max 10MB)" });
         }
 
-        var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/products");
+        var uploadPath = Path.Combine(_env.WebRootPath, "images", "products");
         
         // Ensure directory exists
         if (!Directory.Exists(uploadPath))
@@ -128,9 +145,11 @@ public class AdminProductController :Controller
         tempPictures.Remove(imagePath);
         HttpContext.Session.SetObjectAsJson(sessionKey, tempPictures);
 
-        // Delete file from disk
-        var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", imagePath.TrimStart('/'));
-        if (System.IO.File.Exists(fullPath))
+        // Delete file from disk (only if no product uses it)
+        var fullPath = ResolveProductImage(imagePath);
+        if (fullPath == null)
+            return BadRequest("Invalid image path");
+        if (System.IO.File.Exists(fullPath) && !_db.ProductPictures.Any(pp => pp.PicturePath == imagePath))
         {
             try
             {
@@ -164,6 +183,20 @@ public class AdminProductController :Controller
             return View("~/Views/Admin/ProductForm.cshtml", model);
         }
 
+        // Two products with the same URL would make one of them unreachable
+        var slug = SlugHelper.ToUrlFriendly(model.Product.ProductName);
+        var clash = _db.Products.AsEnumerable()
+            .Any(p => p.ProductId != model.Product.ProductId && SlugHelper.ToUrlFriendly(p.ProductName) == slug);
+        if (clash || model.Product.ProductPriceInVAT <= 0)
+        {
+            ModelState.AddModelError("Product.ProductName", clash ? "Et annet produkt har allerede dette navnet." : "Prisen må være større enn 0.");
+            model.AllCategories = _db.Categories.OrderBy(c => c.CategoryName).ToList();
+            model.AllPhysicalAttributes = _db.PhysicalAttributes.OrderBy(p => p.Attribute).ToList();
+            model.AllTags = _db.Tags.Select(t => t.Tags).ToList();
+            model.ExistingImagePaths = HttpContext.Session.GetObjectFromJson<List<string>>(model.TempID) ?? new List<string>();
+            return View("~/Views/Admin/ProductForm.cshtml", model);
+        }
+
         Product product;
 
         // If ProductId exists, update instead of creating
@@ -185,7 +218,9 @@ public class AdminProductController :Controller
             product.ProductInstructions = model.Product.ProductInstructions;
             product.ProductIngredients = model.Product.ProductIngredients;
             product.ProductPriceInVAT = model.Product.ProductPriceInVAT;
-            product.ProductCampaignPrice = model.Product.ProductCampaignPrice;
+            product.ProductPriceExVAT = Pricing.ExVat(model.Product.ProductPriceInVAT);
+            product.LabelDescription = model.Product.LabelDescription;
+            product.ProductVisibility = model.Product.ProductVisibility;
             product.StockCount = model.Product.StockCount;
 
             // Clear existing relationships before re-adding
@@ -198,6 +233,8 @@ public class AdminProductController :Controller
         {
             // Create new product
             product = model.Product;
+            product.ProductCampaignPrice = null; // set by campaigns
+            product.ProductPriceExVAT = Pricing.ExVat(product.ProductPriceInVAT);
             _db.Products.Add(product);
             await _db.SaveChangesAsync();
         }
@@ -262,6 +299,9 @@ public class AdminProductController :Controller
 
         await _db.SaveChangesAsync();
 
+        // The sale price depends on price and categories
+        _campaigns.RecalculateAll();
+
         // Clear temp images from session
         HttpContext.Session.Remove(model.TempID);
 
@@ -324,11 +364,12 @@ public class AdminProductController :Controller
 
         try
         {
-            // Delete product images from disk
+            // Delete product images from disk, but not files another product still uses
             foreach (var picture in product.ProductPictures)
             {
-                var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", picture.PicturePath.TrimStart('/'));
-                if (System.IO.File.Exists(fullPath))
+                var fullPath = ResolveProductImage(picture.PicturePath);
+                var usedElsewhere = _db.ProductPictures.Any(pp => pp.PicturePath == picture.PicturePath && pp.ProductId != product.ProductId);
+                if (fullPath != null && !usedElsewhere && System.IO.File.Exists(fullPath))
                 {
                     try
                     {

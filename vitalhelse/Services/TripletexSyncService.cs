@@ -60,7 +60,7 @@ public class TripletexSyncService
                     // Update existing product
                     dbProd.ProductName = tProd.Name;
                     dbProd.ProductPriceInVAT = tProd.PriceInVat;
-                    dbProd.ProductPriceExVAT = tProd.PriceExVat;
+                    dbProd.ProductPriceExVAT = tProd.PriceExVat > 0 ? tProd.PriceExVat : Pricing.ExVat(tProd.PriceInVat);
                     dbProd.StockCount = (int?)tProd.StockCount;
 
                     updated++;
@@ -78,6 +78,9 @@ public class TripletexSyncService
             }
 
             await _db.SaveChangesAsync();
+
+            // Prices may have changed in Tripletex, so sale prices must follow
+            new CampaignService(_db).RecalculateAll();
         }
         catch (Exception ex)
         {

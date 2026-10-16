@@ -8,6 +8,7 @@ using VitalHelse.Models.Shipping;
 namespace VitalHelse.Controllers.Admin.ShippingManagement;
 
 [Authorize(Roles = "Admin,Staff")]
+[AutoValidateAntiforgeryToken]
 public class ShippingManagementController : Controller
 {
     private readonly ApplicationDbContext _db;

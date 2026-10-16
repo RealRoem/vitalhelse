@@ -18,7 +18,6 @@
 
     <!-- 3. Component-level -->
     <link rel="stylesheet" href="~/css/components/productgrid.css" asp-append-version="true"/>
-    <link rel="stylesheet" href="~/css/components/listview.css" asp-append-version="true"/>
 
     <!-- 4. Page-level -->
     <link rel="stylesheet" href="~/css/admin/discount.css" />
@@ -83,6 +82,14 @@
         </header>
 
         <section class="admin-body">
+            @if (TempData["Error"] is string adminError)
+            {
+                <div class="alert alert-danger" role="alert">@adminError</div>
+            }
+            @if (TempData["Success"] is string adminSuccess)
+            {
+                <div class="alert alert-success" role="alert">@adminSuccess</div>
+            }
             @RenderBody()
         </section>
     </main>
